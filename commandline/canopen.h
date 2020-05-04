@@ -81,7 +81,10 @@ const char *abortcode_text(uint32_t abortcode);
 SDO *parseSDO(CANmesg *mesg);
 SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID);
 
-int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID);
 int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID);
 
+int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, uint8_t *data);
+int SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data);
+
+//int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID);
 #endif // CANOPEN_H__

@@ -75,9 +75,10 @@ const char *abortcode_text(uint32_t abortcode){ //, int *n){
     do{
         ++iter;
         uint32_t c = AC[idx].code;
-        printf("idx=%d, min=%d, max=%d\n", idx, min_, max_);
+        //printf("idx=%d, min=%d, max=%d\n", idx, min_, max_);
         if(c == abortcode){
             //if(n) *n = iter;
+            //DBG("got : %s", AC[idx].errmsg);
             return AC[idx].errmsg;
         }else if(c > abortcode){
             newidx = (idx + min_)/2;
@@ -155,6 +156,26 @@ static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
     return canbus_write(mesg);
 }
 
+static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
+    CANmesg mesg;
+    SDO *sdo = NULL;
+    double t0 = dtime();
+    while(dtime() - t0 < SDO_ANS_TIMEOUT){
+        mesg.ID = TSDO_COBID | NID; // read only from given ID
+        if(canbus_read(&mesg)){
+            continue;
+        }
+        sdo = parseSDO(&mesg);
+        if(!sdo) continue;
+        if(sdo->index == idx && sdo->subindex == subidx) break;
+    }
+    if(!sdo || sdo->index != idx || sdo->subindex != subidx){
+        WARNX("No answer from SDO 0x%X/0x%X", idx, subidx);
+        return NULL;
+    }
+    return sdo;
+}
+
 /**
  * @brief readSDOvalue - send request to SDO read
  * @param idx    - SDO index
@@ -163,25 +184,11 @@ static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
  * @return SDO received or NULL if error
  */
 SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID){
-    SDO *sdo = NULL;
     if(ask2read(idx, subidx, NID)){
         WARNX("Can't initiate upload");
         return NULL;
     }
-    CANmesg mesg;
-    double t0 = dtime();
-    while(dtime() - t0 < SDO_ANS_TIMEOUT){
-        mesg.ID = TSDO_COBID | NID; // read only from given ID
-        if(canbus_read(&mesg)) continue;
-        sdo = parseSDO(&mesg);
-        if(!sdo) continue;
-        if(sdo->index == idx && sdo->subindex == subidx) break;
-    }
-    if(!sdo || sdo->index != idx || sdo->subindex != subidx){
-        WARNX("No answer for SDO reading");
-        return NULL;
-    }
-    return sdo;
+    return getSDOans(idx, subidx, NID);
 }
 
 static inline uint32_t mku32(uint8_t data[4]){
@@ -215,7 +222,7 @@ int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
         WARNX("SDO read error");
         return INT64_MIN;
     }
-    if(sdo->datalen == 0){
+    if(sdo->ccs == CCS_ABORT_TRANSFER){ // error
         WARNX("Got error for SDO 0x%X", e->index);
         uint32_t ac = mku32(sdo->data);
         const char *etxt = abortcode_text(ac);
@@ -252,8 +259,101 @@ int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
     return ans;
 }
 
+// write SDO data
+int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, uint8_t *data){
+    if(!e || !data || e->datasize < 1 || e->datasize > 4){
+        WARNX("SDO_write(): bad datalen");
+        return 1;
+    }
+    SDO sdo;
+    sdo.NID = NID;
+    sdo.ccs = CCS_INIT_DOWNLOAD;
+    sdo.datalen = e->datasize;
+    for(uint8_t i = 0; i < e->datasize; ++i) sdo.data[i] = data[i];
+    sdo.index = e->index;
+    sdo.subindex = e->subindex;
+    CANmesg *mesgp = mkMesg(&sdo);
+    if(canbus_write(mesgp)){
+        WARNX("SDO_write(): Can't initiate download");
+        return 2;
+    }
+    SDO *sdop = getSDOans(e->index, e->subindex, NID);
+    if(!sdop){
+        WARNX("SDO_write(): SDO read error");
+        return 3;
+    }
+    if(sdop->ccs == CCS_ABORT_TRANSFER){ // error
+        WARNX("SDO_write(): Got error for SDO 0x%X", e->index);
+        uint32_t ac = mku32(sdop->data);
+        const char *etxt = abortcode_text(ac);
+        if(etxt) WARNX("Abort code 0x%X: %s", ac, etxt);
+        return 4;
+    }
+    if(sdop->datalen != 0){
+        WARNX("SDO_write(): got answer with non-zero length");
+        return 5;
+    }
+    if(sdop->ccs != CCS_SEG_UPLOAD){
+        WARNX("SDO_write(): got wrong answer");
+        return 6;
+    }
+    return 0;
+}
+
+int SDO_write(const SDO_dic_entry *e, _U_ uint8_t NID, int64_t data){
+    if(!e) return 1;
+    uint8_t arr[4] = {0};
+    uint32_t U;
+    int32_t I;
+    uint16_t U16;
+    int16_t I16;
+    if(e->issigned){
+        switch(e->datasize){
+            case 1:
+                arr[0] = (uint8_t) data;
+            break;
+            case 4:
+                I = (int32_t) data;
+                arr[0] = I&0xff;
+                arr[1] = (I>>8)&0xff;
+                arr[2] = (I>>16)&0xff;
+                arr[3] = (I>>24)&0xff;
+            break;
+            default: // can't be 3! 3->2
+                I16 = (int16_t) data;
+                arr[0] = I16&0xff;
+                arr[1] = (I16>>8)&0xff;
+        }
+    }else{
+        switch(e->datasize){
+            case 1:
+                arr[0] = (uint8_t) data;
+            break;
+            case 4:
+                U = (uint32_t) data;
+                arr[0] = U&0xff;
+                arr[1] = (U>>8)&0xff;
+                arr[2] = (U>>16)&0xff;
+                arr[3] = (U>>24)&0xff;
+            break;
+            default: // can't be 3! 3->2
+                U16 = (uint16_t) data;
+                arr[0] = U16&0xff;
+                arr[1] = (U16>>8)&0xff;
+        }
+    }
+    /*
+    DBG("DATA:");
+    for(int i = 0; i < e->datasize; ++i) printf("0x%X ", arr[i]);
+    printf("\n");
+    return 0;*/
+    return SDO_writeArr(e, NID, arr);
+}
+
+
+
 // read one byte of data
-int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID){
+/*int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID){
     SDO *sdo = readSDOvalue(idx, subidx, NID);
     if(!sdo || sdo->datalen != 1){
         WARNX("Got SDO with wrong data length: %d instead of 1", sdo->datalen);
@@ -261,7 +361,7 @@ int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID){
     }
     if(data) *data = sdo->data[0];
     return 0;
-}
+}*/
 
 #if 0
 // write uint8_t to SDO with index idx & subindex subidx to NID

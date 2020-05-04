@@ -69,9 +69,18 @@ DICENTRY(MAXCURNT,      0x600B, 0, 2, 0)
 DICENTRY(POSITION,      0x600C, 0, 4, 0)
 // motor enable
 DICENTRY(ENABLE,        0x600E, 0, 1, 0)
+// absolute displacement
+DICENTRY(ABSSTEPS,      0x601C, 0, 4, 1)
+// stop motor
+DICENTRY(STOP,          0x6020, 0, 1, 0)
 
+#define MAX_SPEED_MIN   -200000
+#define MAX_SPEED_MAX   200000
 
-
+// unclearable status
+#define BUSY_STATE      (1<<3)
+const char *devstatus(uint8_t status, uint8_t bit);
+const char *errname(uint8_t error, uint8_t bit);
 //int get_current_position(uint8_t NID);
 
 #endif // PUSIROBOT_H__

@@ -16,11 +16,47 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-//#include <limits.h>
+#include <stdlib.h> // for NULL
 
 // we should init constants here!
 #define DICENTRY(name, idx, sidx, sz, s)  const SDO_dic_entry name = {idx, sidx, sz, s};
 #include "pusirobot.h"
+
+// controller status for bits
+static const char *DevStatus[] = {
+    "External stop 1",
+    "External stop 2",
+    "Stall state",
+    "Busy state",
+    "External stop 3",
+    "The FIFO of PVT Mode 3 is empty",
+    "FIFO Lower bound of PVT Mode 3",
+    "FIFO upper limit of PVT mode 3"
+};
+
+// controller error statuses
+static const char *DevError[] = {
+    "TSD, over temperature shutdown",
+    "AERR, coil A error",
+    "BERR, coil B error",
+    "AOC, A over current",
+    "BOC, B over current",
+    "UVLO, low voltage fault"
+};
+
+// return status message for given bit in status
+const char *devstatus(uint8_t status, uint8_t bit){
+    if(bit > 7) return NULL;
+    if(status & (1<<bit)) return DevStatus[bit];
+    return NULL;
+}
+
+// error codes explanation
+const char *errname(uint8_t error, uint8_t bit){
+    if(bit > 5) return NULL;
+    if(error & (1<<bit)) return DevError[bit];
+    return NULL;
+}
 
 /*
 // get current position for node ID `NID`, @return INT_MIN if error

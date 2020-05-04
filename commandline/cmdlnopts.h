@@ -40,6 +40,11 @@ typedef struct{
     int NodeID;             // node ID to work with
     int absmove;            // absolute position to move
     int relmove;            // relative position to move
+    int microsteps;         // set microstepping
+    int maxspeed;           // max speed
+    int stop;               // stop motor
+    int clearerr;           // try to clear errors
+    int zeropos;            // set position to zero
 } glob_pars;
 
 

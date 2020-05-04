@@ -100,6 +100,7 @@ static int ttyWR(const char *buff, int len){
         return 1;
     }
     pthread_mutex_unlock(&mutex);
+    DBG("Success");
     return w;
 }
 
@@ -228,6 +229,7 @@ void showM(CANmesg *m){
 }
 
 int canbus_read(CANmesg *mesg){
+    FNAME();
     if(!mesg) return 1;
     pthread_mutex_lock(&mutex);
     double t0 = dtime();
@@ -236,7 +238,6 @@ int canbus_read(CANmesg *mesg){
     CANmesg *m;
     while(dtime() - t0 < T_POLLING_TMOUT){ // read answer
         if((ans = read_string())){ // parse new data
-            pthread_mutex_unlock(&mutex);
             if((m = parseCANmesg(ans))){
                 DBG("Got canbus message:");
                 showM(m);

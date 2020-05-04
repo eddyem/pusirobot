@@ -32,6 +32,7 @@ static glob_pars *GP = NULL;  // for GP->pidfile need in `signals`
 
 void signals(int sig){
     putlog("Exit with status %d", sig);
+    DBG("Exit with status %d", sig);
     restore_console();
     if(GP->pidfile) // remove unnesessary PID file
         unlink(GP->pidfile);
@@ -57,6 +58,15 @@ int main(int argc, char *argv[]){
     if(GP->NodeID != 1){
         if(GP->NodeID < 1 || GP->NodeID > 127) ERRX("Node ID should be a number from 1 to 127");
     }
+    if(GP->microsteps > 0 && (1 != __builtin_popcount(GP->microsteps) || GP->microsteps == 1)) // __builtin_popcount - amount of non-zero bits in uint
+        ERRX("Wrong microstepping settings, should be 0 or 2^(1..8)");
+    if(GP->absmove != INT_MIN || GP->relmove != INT_MIN){ // wanna move
+        if(GP->absmove != INT_MIN && GP->relmove != INT_MIN)
+            ERRX("ABSMOVE and RELMOVE can't be used together");
+        if(GP->maxspeed == 0)
+            ERRX("Set non-zero MAXSPEED");
+    }
+
     if(GP->logfile) openlogfile(GP->logfile);
     putlog(("Start application..."));
     putlog("Try to open CAN bus device %s", GP->device);
@@ -73,13 +83,89 @@ int main(int argc, char *argv[]){
     //setup_con();
     // print current position and state
     int64_t i64;
-    if(INT64_MIN != (i64 = SDO_read(&DEVSTATUS, GP->NodeID)))
+    uint8_t ID = GP->NodeID;
+    if(INT64_MIN != (i64 = SDO_read(&ERRSTATE, ID))){
+        if(i64){
+            red("ERRSTATE=%d\n", i64);
+            uint8_t s = (uint8_t)i64;
+            for(uint8_t i = 0; i < 8; ++i){
+                const char *msg = errname(s, i);
+                if(msg) red("\t%s\n", msg);
+            }
+            if(!GP->clearerr) ERRX("Error status is not zero");
+            if(SDO_write(&ERRSTATE, ID, s) || 0 != (i64 = SDO_read(&ERRSTATE, ID))){
+                ERRX("Can't clean error status");
+            }
+        }
+    }
+    if(INT64_MIN != (i64 = SDO_read(&DEVSTATUS, ID))){
         green("DEVSTATUS=%d\n", (int)i64);
-    if(INT64_MIN != (i64 = SDO_read(&POSITION, GP->NodeID)))
-        green("CURPOS=%d\n", (int)i64);
-    if(INT64_MIN != (i64 = SDO_read(&MAXSPEED, GP->NodeID)))
-        green("MAXSPEED=%d\n", (int)i64);
+        uint8_t s = (uint8_t)i64;
+        if(s){
+            for(uint8_t i = 0; i < 8; ++i){
+                const char *msg = devstatus(s, i);
+                if(msg) red("\t%s\n", msg);
+            }
+            if(s != BUSY_STATE && GP->clearerr && (SDO_write(&DEVSTATUS, ID, s) || 0 != (i64 = SDO_read(&DEVSTATUS, ID)))){
+                ERRX("Can't clean device status");
+            }
+            if(i64 && i64 != BUSY_STATE) ERRX("Can't work in this state"); // DIE if !busy
+        }
+    }else ERRX("Can't get device status");
+    if(GP->zeropos){
+        i64 = 0;
+        if(SDO_write(&POSITION, ID, i64))
+            ERRX("Can't clear position counter");
+    }
+    uint16_t microstepping = 0;
+    if(INT64_MIN != (i64 = SDO_read(&MICROSTEPS, ID))){
+        if(GP->microsteps > -1 && GP->microsteps != (int) i64){
+            DBG("Try to change microsteps");
+            if(SDO_write(&MICROSTEPS, ID, GP->microsteps) || INT64_MIN == (i64 = SDO_read(&MICROSTEPS, ID)))
+                ERRX("Can't change microstepping");
+        }
+        microstepping = (uint16_t) i64;
+        green("MICROSTEPPING=%u\n", microstepping);
+    }else ERRX("Can't get microstepping");
+    if(INT64_MIN != (i64 = SDO_read(&POSITION, ID)))
+        green("CURPOS=%d\n", (int)i64/microstepping);
+    else ERRX("Can't read current position");
+    if(INT64_MIN != (i64 = SDO_read(&MAXSPEED, ID))){
+        DBG("abs=%d, rel=%d", GP->absmove, GP->relmove);
+        if(i64 == 0 && (GP->absmove != INT_MIN || GP->relmove != INT_MIN) && (GP->maxspeed == INT_MIN || GP->maxspeed == 0))
+            ERRX("Can't move when MAXSPEED==0");
+        if(GP->maxspeed != INT_MIN){
+            GP->maxspeed *= microstepping;
+            if(GP->maxspeed < MAX_SPEED_MIN || GP->maxspeed > MAX_SPEED_MAX)
+                ERRX("MAXSPEED should be from %d to %d", MAX_SPEED_MIN/microstepping, MAX_SPEED_MAX/microstepping);
+            DBG("Try to change max speed");
+            if(SDO_write(&MAXSPEED, ID, GP->maxspeed) || INT64_MIN == (i64 = SDO_read(&MAXSPEED, ID)))
+                ERRX("Can't change max speed");
+        }
+        green("MAXSPEED=%d\n", (int)i64/microstepping);
+    }else ERRX("Can't read max speed");
 
+    if(GP->stop){
+        if(SDO_write(&STOP, ID, 1))
+            ERRX("Can't stop motor");
+    }
+
+    if(GP->absmove != INT_MIN){
+        if(SDO_write(&ABSSTEPS, ID, GP->absmove*microstepping))
+            ERRX("Can't move to absolute position %d", GP->absmove);
+    }
+    if(GP->relmove != INT_MIN && GP->relmove){
+        uint8_t dir = 1;
+        if(GP->relmove < 0){ // negative direction
+            dir = 0;
+            GP->relmove = -GP->relmove;
+        }
+        if(SDO_write(&ROTDIR, ID, dir) || INT64_MIN == (i64 = SDO_read(&ROTDIR, ID)))
+            ERRX("Can't change rotation direction");
+        DBG("i64=%ld, dir=%d", i64, dir);
+        if(SDO_write(&RELSTEPS, ID, GP->relmove*microstepping))
+            ERRX("Can't move to relative position %d", GP->relmove);
+    }
 #if 0
     CANmesg m;
     double t = dtime() - 10.;
