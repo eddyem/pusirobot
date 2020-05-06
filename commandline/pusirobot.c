@@ -18,9 +18,20 @@
 
 #include <stdlib.h> // for NULL
 
-// we should init constants here!
-#define DICENTRY(name, idx, sidx, sz, s)  const SDO_dic_entry name = {idx, sidx, sz, s};
 #include "pusirobot.h"
+
+// we should init constants here!
+#undef DICENTRY
+#define DICENTRY(name, idx, sidx, sz, s)  const SDO_dic_entry name = {idx, sidx, sz, s};
+#include "dicentries.h"
+
+// now init array with all dictionary
+#undef DICENTRY
+#define DICENTRY(name, idx, sidx, sz, s)  {idx, sidx, sz, s},
+static const SDO_dic_entry allrecords[] = {
+#include "dicentries.h"
+};
+const int DEsz = sizeof(allrecords) / sizeof(SDO_dic_entry);
 
 // controller status for bits
 static const char *DevStatus[] = {
@@ -58,12 +69,12 @@ const char *errname(uint8_t error, uint8_t bit){
     return NULL;
 }
 
-/*
-// get current position for node ID `NID`, @return INT_MIN if error
-int get_current_position(uint8_t NID){
-    int64_t val = SDO_read(&POSITION, NID);
-    if(val == INT64_MIN) return INT_MIN;
-    return (int) val;
+// search if the object exists in dictionary - for config file parser
+SDO_dic_entry *dictentry_search(uint16_t index, uint8_t subindex){
+    // the search is linear as dictionary can be unsorted!!!
+    for(int i = 0; i < DEsz; ++i){
+        const SDO_dic_entry *entry = &allrecords[i];
+        if(entry->index == index && entry->subindex == subindex) return (SDO_dic_entry*)entry;
+    }
+    return NULL;
 }
-*/
-

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "dataparser.h"
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -48,6 +49,9 @@ int main(int argc, char *argv[]){
     initial_setup();
     char *self = strdup(argv[0]);
     GP = parse_args(argc, argv);
+    if(GP->checkfile){ // just check and exit
+        return parse_data_file(GP->checkfile, 0);
+    }
     check4running(self, GP->pidfile);
     free(self);
     signal(SIGTERM, signals); // kill (-15) - quit
@@ -78,6 +82,11 @@ int main(int argc, char *argv[]){
     if(canbus_setspeed(GP->canspeed)){
         putlog("Can't set CAN speed %d. Exit.", GP->canspeed);
         signals(2);
+    }
+
+    if(GP->parsefile){
+        green("Try to parse %s and send SDOs to device\n", GP->parsefile);
+        parse_data_file(GP->parsefile, GP->NodeID);
     }
 
     //setup_con();

@@ -54,7 +54,7 @@ static char *read_string();
  * @return amount of bytes read
  */
 static int read_ttyX(TTY_descr *d){
-    if(d->comfd < 0) return 0;
+    if(!d || d->comfd < 0) return -1;
     size_t L = 0;
     ssize_t l;
     size_t length = d->bufsz;

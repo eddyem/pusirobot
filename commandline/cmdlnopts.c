@@ -64,7 +64,7 @@ static myoption cmdlnopts[] = {
     {"serialspd",NEED_ARG,  NULL,   't',    arg_int,    APTR(&G.serialspeed),_("serial (tty) device speed (default: " STR(DEFAULT_SPEED) ")")},
     {"logfile", NEED_ARG,   NULL,   'l',    arg_string, APTR(&G.logfile),   _("file to save logs")},
     {"pidfile", NEED_ARG,   NULL,   'P',    arg_string, APTR(&G.pidfile),   _("pidfile (default: " DEFAULT_PIDFILE ")")},
-    {"nodeid",  NEED_ARG,   NULL,   'i',    arg_int,    APTR(&G.NodeID),    _("node ID (1..127)")},
+    {"nodeid",  NEED_ARG,   NULL,   'I',    arg_int,    APTR(&G.NodeID),    _("node ID (1..127)")},
     {"microsteps", NEED_ARG,NULL,   'u',    arg_int,    APTR(&G.microsteps),_("microstepping (0..256)")},
     {"rel",     NEED_ARG,   NULL,   'r',    arg_int,    APTR(&G.relmove),   _("move to relative position (steps)")},
     {"abs",     NEED_ARG,   NULL,   'a',    arg_int,    APTR(&G.absmove),   _("move to absolute position (steps)")},
@@ -72,6 +72,8 @@ static myoption cmdlnopts[] = {
     {"stop",    NO_ARGS,    NULL,   'S',    arg_int,    APTR(&G.stop),      _("stop motor")},
     {"clearerr",NO_ARGS,    NULL,   'c',    arg_int,    APTR(&G.clearerr),  _("clear errors")},
     {"zeropos", NO_ARGS,    NULL,   '0',    arg_int,    APTR(&G.zeropos),   _("set current position to zero")},
+    {"parse",   NEED_ARG,   NULL,   'p',    arg_string, APTR(&G.parsefile), _("file with SDO data to send to device")},
+    {"check",   NEED_ARG,   NULL,   'k',    arg_string, APTR(&G.checkfile), _("check SDO data file")},
    end_option
 };
 

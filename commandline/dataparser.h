@@ -15,34 +15,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #pragma once
-#ifndef PUSIROBOT_H__
-#define PUSIROBOT_H__
+#ifndef DATAPARSER_H__
+#define DATAPARSER_H__
 
 #include <stdint.h>
 
-// entry of SDO dictionary
-typedef struct{
-    uint16_t index;     // SDO index
-    uint8_t subindex;   // SDO subindex
-    uint8_t datasize;   // data size: 1,2,3 or 4 bytes
-    uint8_t issigned;   // signess: if issigned==1, then signed, else unsigned
-} SDO_dic_entry;
+int parse_data_file(const char *fname, uint8_t nid);
 
-#ifndef DICENTRY
-#define DICENTRY(name, idx, sidx, sz, s)  extern const SDO_dic_entry name;
-#endif
-
-#include "dicentries.h"
-
-#define MAX_SPEED_MIN   -200000
-#define MAX_SPEED_MAX   200000
-
-// unclearable status
-#define BUSY_STATE      (1<<3)
-const char *devstatus(uint8_t status, uint8_t bit);
-const char *errname(uint8_t error, uint8_t bit);
-SDO_dic_entry *dictentry_search(uint16_t index, uint8_t subindex);
-//int get_current_position(uint8_t NID);
-
-#endif // PUSIROBOT_H__
+#endif // DATAPARSER_H__
