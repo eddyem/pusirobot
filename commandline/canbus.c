@@ -112,6 +112,11 @@ void setserialspeed(int speed){
     serialspeed = speed;
 }
 
+static void clearRXbuf(){
+    double t0 = dtime();
+    while(read_string() && dtime() - t0 < T_POLLING_TMOUT){usleep(1000);}
+}
+
 int canbus_open(const char *devname){
     if(!devname){
         WARNX("canbus_open(): need device name");
@@ -138,7 +143,7 @@ int canbus_setspeed(int speed){
     }
     int len = snprintf(buff, BUFLEN, "b %d", speed);
     if(len < 1) return 2;
-    while(read_string()); // clear buffer
+    clearRXbuf();
     return ttyWR(buff, len);
 }
 
@@ -153,7 +158,7 @@ int canbus_write(CANmesg *mesg){
         rem -= l; len += l;
         if(rem < 0) return 2;
     }
-    while(read_string()); // clear buffer
+    clearRXbuf();
     return ttyWR(buf, len);
 }
 
@@ -220,6 +225,7 @@ CANmesg *parseCANmesg(const char *str){
     return &m;
 }
 
+#if 0
 void showM(CANmesg *m){
     printf("TS=%d, ID=0x%X", m->timemark, m->ID);
     int l = m->len;
@@ -227,6 +233,7 @@ void showM(CANmesg *m){
     for(int i = 0; i < l; ++i) printf(" 0x%02X", m->data[i]);
     printf("\n");
 }
+#endif
 
 int canbus_read(CANmesg *mesg){
     FNAME();
@@ -239,8 +246,8 @@ int canbus_read(CANmesg *mesg){
     while(dtime() - t0 < T_POLLING_TMOUT){ // read answer
         if((ans = read_string())){ // parse new data
             if((m = parseCANmesg(ans))){
-                DBG("Got canbus message:");
-                showM(m);
+                //DBG("Got canbus message:");
+                //showM(m);
                 if(ID && m->ID == ID){
                     memcpy(mesg, m, sizeof(CANmesg));
                     DBG("All OK");

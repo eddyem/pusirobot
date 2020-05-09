@@ -60,6 +60,8 @@ DICENTRY(EXTENABLE,     0x600F, 1, 1, 0)
 DICENTRY(EXTTRIGMODE,   0x600F, 2, 1, 0)
 // EXT emergency sensor type
 DICENTRY(EXTSENSTYPE,   0x600F, 3, 1, 0)
+// GPIO value
+DICENTRY(GPIOVAL,       0x6012, 0, 2, 0)
 // absolute displacement
 DICENTRY(ABSSTEPS,      0x601C, 0, 4, 1)
 // stop motor

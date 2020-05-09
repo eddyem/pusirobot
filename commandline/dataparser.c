@@ -125,7 +125,10 @@ int parse_data_file(const char *fname, uint8_t nid){
                     continue;
                 }
             }
-            if(nid) SDO_write(entry, nid, data);
+            if(nid){
+                if(SDO_write(entry, nid, data)) WARNX("Can't write SDO idx=0x%04X", entry->index);
+                else printf("Send to NID=%d SDO [0x%04X, 0x%02X] with data 0x%lX\n", nid, entry->index, entry->subindex, data);
+            }
         }while(0);
         if(!isgood){
             WARNX("Bad syntax in line #%d: %s\nFormat: index, subindex, data (all may be hex, dec, oct or bin)", lineno, str);

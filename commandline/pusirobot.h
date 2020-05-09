@@ -38,6 +38,11 @@ typedef struct{
 #define MAX_SPEED_MIN   -200000
 #define MAX_SPEED_MAX   200000
 
+// limit switches mask in GPIO status register (x=1,2,3)
+#define EXTMASK(x)      (1<<(6+x))
+
+#define EXTACTIVE(x, reg)   ((reg&EXTMASK(x)) ? 1:0)
+
 // unclearable status
 #define BUSY_STATE      (1<<3)
 const char *devstatus(uint8_t status, uint8_t bit);

@@ -36,6 +36,7 @@ typedef struct{
     char *pidfile;          // name of PID file
     char *logfile;          // logging to this file
     char *parsefile;        // file to parse
+    char *checkfile;        // SDO data filename to check
     int canspeed;           // CAN bus speed
     int serialspeed;        // serial device speed (CAN-bus to USB)
     int NodeID;             // node ID to work with
@@ -46,7 +47,7 @@ typedef struct{
     int stop;               // stop motor
     int clearerr;           // try to clear errors
     int zeropos;            // set position to zero
-    char *checkfile;        // SDO data filename to check
+    int disable;            // disable motor
 } glob_pars;
 
 
