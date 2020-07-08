@@ -48,6 +48,7 @@ typedef struct{
     int clearerr;           // try to clear errors
     int zeropos;            // set position to zero
     int disable;            // disable motor
+    int showpars;           // show values of some parameters
 } glob_pars;
 
 

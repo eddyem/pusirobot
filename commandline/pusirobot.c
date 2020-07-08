@@ -22,16 +22,18 @@
 
 // we should init constants here!
 #undef DICENTRY
-#define DICENTRY(name, idx, sidx, sz, s)  const SDO_dic_entry name = {idx, sidx, sz, s};
-#include "dicentries.h"
+#define DICENTRY(name, idx, sidx, sz, s, n)  const SDO_dic_entry name = {idx, sidx, sz, s, n};
+#include "dicentries.in"
 
 // now init array with all dictionary
 #undef DICENTRY
-#define DICENTRY(name, idx, sidx, sz, s)  {idx, sidx, sz, s},
-static const SDO_dic_entry allrecords[] = {
-#include "dicentries.h"
+#define nnn(nm)  nm
+#define lnk(nm) & ## nnn(nm)
+#define DICENTRY(name, idx, sidx, sz, s, n)  &name,
+const SDO_dic_entry* allrecords[] = {
+#include "dicentries.in"
 };
-const int DEsz = sizeof(allrecords) / sizeof(SDO_dic_entry);
+const int DEsz = sizeof(allrecords) / sizeof(SDO_dic_entry*);
 
 // controller status for bits
 static const char *DevStatus[] = {
@@ -73,7 +75,7 @@ const char *errname(uint8_t error, uint8_t bit){
 SDO_dic_entry *dictentry_search(uint16_t index, uint8_t subindex){
     // the search is linear as dictionary can be unsorted!!!
     for(int i = 0; i < DEsz; ++i){
-        const SDO_dic_entry *entry = &allrecords[i];
+        const SDO_dic_entry *entry = allrecords[i];
         if(entry->index == index && entry->subindex == subindex) return (SDO_dic_entry*)entry;
     }
     return NULL;

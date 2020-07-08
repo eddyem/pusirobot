@@ -33,6 +33,7 @@ static glob_pars *GP = NULL;  // for GP->pidfile need in `signals`
 static uint8_t ID = 0;
 static uint16_t microstepping = 0;
 
+// default signal handler
 void signals(int sig){
     putlog("Exit with status %d", sig);
     DBG("Exit with status %d", sig);
@@ -47,6 +48,7 @@ void iffound_default(pid_t pid){
     ERRX("Another copy of this process found, pid=%d. Exit.", pid);
 }
 
+// error state check
 static inline void chkerr(int64_t es){
     if(!es) return;
     red("ERRSTATE=%d\n", es);
@@ -61,6 +63,7 @@ static inline void chkerr(int64_t es){
     }
 }
 
+// device status check
 static inline void chkstat(int64_t es){
     if(es) red("DEVSTATUS=%d\n", (int)es);
     else green("DEVSTATUS=0\n");
@@ -77,6 +80,7 @@ static inline void chkstat(int64_t es){
     }
 }
 
+// setup microstepping
 static inline void setusteps(int64_t es){
     if(GP->microsteps > -1 && GP->microsteps != (int) es){
         DBG("Try to change microsteps");
@@ -87,6 +91,7 @@ static inline void setusteps(int64_t es){
     green("MICROSTEPPING=%u\n", microstepping);
 }
 
+// setup maximal speed
 static inline void setmaxspd(int64_t es){
     DBG("abs=%d, rel=%d", GP->absmove, GP->relmove);
     if(es == 0 && (GP->absmove != INT_MIN || GP->relmove != INT_MIN) && (GP->maxspeed == INT_MIN || GP->maxspeed == 0))
@@ -103,6 +108,7 @@ static inline void setmaxspd(int64_t es){
     else red("MAXSPEED=0\n");
 }
 
+// get ESW values
 static inline void gpioval(int64_t es){
     uint16_t v = (uint16_t) es;
     if(INT64_MIN == (es = SDO_read(&EXTENABLE, ID))){
@@ -113,6 +119,23 @@ static inline void gpioval(int64_t es){
         if(0 == (es & 1<<(i-1))) continue; // endswitch disabled
         if(EXTACTIVE(i, v)) red("LIM%d=1\n", i);
     }
+}
+
+// show values of all parameters from dicentries.in
+static inline void showAllPars(){
+    green("\nParameters' values:");
+    for(int i = 0; i < DEsz; ++i){
+        const SDO_dic_entry *entry = allrecords[i];
+        int64_t val = SDO_read(entry, GP->NodeID);
+        if(val == INT64_MIN){
+            WARNX("Can't read value of SDO 0x%04X/%d (%s)",
+                  entry->index, entry->subindex, entry->name);
+            continue;
+        }
+        printf("\n# %s\n0x%04X, %d, %ld", entry->name, entry->index,
+               entry->subindex, val);
+    }
+    printf("\n\n");
 }
 
 int main(int argc, char *argv[]){
@@ -154,11 +177,6 @@ int main(int argc, char *argv[]){
         signals(2);
     }
 
-    if(GP->parsefile){
-        green("Try to parse %s and send SDOs to device\n", GP->parsefile);
-        parse_data_file(GP->parsefile, GP->NodeID);
-    }
-
     //setup_con();
     // print current position and state
     int64_t i64;
@@ -167,6 +185,16 @@ int main(int argc, char *argv[]){
 #define getSDOw(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else WARNX(e);}while(0)
     getSDOe(ERRSTATE, chkerr, "Can't get error status");
     getSDOe(DEVSTATUS, chkstat, "Can't get device status");
+
+    if(GP->parsefile){
+        green("Try to parse %s and send SDOs to device\n", GP->parsefile);
+        parse_data_file(GP->parsefile, GP->NodeID);
+    }
+
+    if(GP->showpars){
+        showAllPars();
+    }
+
     getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
     if(GP->zeropos){
         if(SDO_write(&POSITION, ID, 0))

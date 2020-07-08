@@ -27,13 +27,17 @@ typedef struct{
     uint8_t subindex;   // SDO subindex
     uint8_t datasize;   // data size: 1,2,3 or 4 bytes
     uint8_t issigned;   // signess: if issigned==1, then signed, else unsigned
+    const char *name;   // dictionary entry name
 } SDO_dic_entry;
 
 #ifndef DICENTRY
-#define DICENTRY(name, idx, sidx, sz, s)  extern const SDO_dic_entry name;
+#define DICENTRY(name, idx, sidx, sz, s, n)  extern const SDO_dic_entry name;
 #endif
 
-#include "dicentries.h"
+#include "dicentries.in"
+
+extern const int DEsz;
+extern const SDO_dic_entry* allrecords[];
 
 #define MAX_SPEED_MIN   -200000
 #define MAX_SPEED_MAX   200000
@@ -48,6 +52,4 @@ typedef struct{
 const char *devstatus(uint8_t status, uint8_t bit);
 const char *errname(uint8_t error, uint8_t bit);
 SDO_dic_entry *dictentry_search(uint16_t index, uint8_t subindex);
-//int get_current_position(uint8_t NID);
-
 #endif // PUSIROBOT_H__

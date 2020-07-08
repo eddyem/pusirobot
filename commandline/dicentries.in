@@ -1,0 +1,95 @@
+/*
+ * This file is part of the stepper project.
+ * Copyright 2020 Edward V. Emelianov <edward.emelianoff@gmail.com>.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option, "") any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+// this file can be included more than once!
+
+// variable name / index / subindex / datasize / issigned / name
+
+// heartbeat time
+DICENTRY(HEARTBTTIME,   0x1017, 0, 2, 0, "heartbeat time")
+// node ID
+DICENTRY(NODEID,        0x2002, 0, 1, 0, "node ID")
+// baudrate
+DICENTRY(BAUDRATE,      0x2003, 0, 1, 0, "baudrate")
+// system control: 1- bootloader, 2 - save parameters, 3 - reset factory settings
+DICENTRY(SYSCONTROL,    0x2007, 0, 1, 0, "system control: 1- bootloader, 2 - save parameters, 3 - reset factory settings")
+// error status
+DICENTRY(ERRSTATE,      0x6000, 0, 1, 0, "error status")
+// controller status
+DICENTRY(DEVSTATUS,     0x6001, 0, 1, 0, "controller status")
+// rotation direction
+DICENTRY(ROTDIR,        0x6002, 0, 1, 0, "rotation direction")
+// maximal speed
+DICENTRY(MAXSPEED,      0x6003, 0, 4, 1, "maximal speed")
+// relative displacement
+DICENTRY(RELSTEPS,      0x6004, 0, 4, 0, "relative displacement")
+// operation mode
+DICENTRY(OPMODE,        0x6005, 0, 1, 0, "operation mode")
+// start speed
+DICENTRY(STARTSPEED,    0x6006, 0, 2, 0, "start speed")
+// stop speed
+DICENTRY(STOPSPEED,     0x6007, 0, 2, 0, "stop speed")
+// acceleration coefficient
+DICENTRY(ACCELCOEF,     0x6008, 0, 1, 0, "acceleration coefficient")
+// deceleration coefficient
+DICENTRY(DECELCOEF,     0x6009, 0, 1, 0, "deceleration coefficient")
+// microstepping
+DICENTRY(MICROSTEPS,    0x600A, 0, 2, 0, "microstepping")
+// max current
+DICENTRY(MAXCURNT,      0x600B, 0, 2, 0, "maximum phase current")
+// current position
+DICENTRY(POSITION,      0x600C, 0, 4, 0, "current position")
+// current reduction
+DICENTRY(CURRREDUCT,    0x600D, 0, 1, 0, "current reduction")
+// motor enable
+DICENTRY(ENABLE,        0x600E, 0, 1, 0, "motor enable")
+// EXT emergency stop enable
+DICENTRY(EXTENABLE,     0x600F, 1, 1, 0, "EXT emergency stop enable")
+// EXT emergency stop trigger mode
+DICENTRY(EXTTRIGMODE,   0x600F, 2, 1, 0, "EXT emergency stop trigger mode")
+// EXT emergency sensor type
+DICENTRY(EXTSENSTYPE,   0x600F, 3, 1, 0, "EXT emergency sensor type")
+// GPIO direction
+DICENTRY(GPIODIR,       0x6011, 1, 2, 0, "GPIO direction")
+// GPIO configuration
+DICENTRY(GPIOCONF,      0x6011, 2, 4, 0, "GPIO configuration")
+// GPIO value
+DICENTRY(GPIOVAL,       0x6012, 0, 2, 0, "GPIO value")
+// stall parameters
+DICENTRY(STALLPARS,     0x6017, 0, 2, 0, "stall parameters (open loop)")
+// stall set
+DICENTRY(STALLSET,      0x601B, 0, 1, 0, "stall set (open loop)")
+// absolute displacement
+DICENTRY(ABSSTEPS,      0x601C, 0, 4, 1, "absolute displacement")
+// stop motor
+DICENTRY(STOP,          0x6020, 0, 1, 0, "stop motor")
+// encoder resolution
+DICENTRY(ENCRESOL,      0x6021, 0, 2, 0, "encoder resolution (closed loop)")
+// stall length parameter
+DICENTRY(STALLLEN,      0x6028, 0, 2, 0, "stall length parameter (closed loop)")
+// torque ring enable
+DICENTRY(TORQRING,      0x6029, 0, 1, 0, "torque ring enable (closed loop)")
+// autosave position
+DICENTRY(POSAUTOSAVE,   0x602A, 0, 1, 0, "autosave position (closed loop)")
+// real time speed
+DICENTRY(REALTIMESPD,   0x6030, 0, 2, 1, "real time speed (closed loop)")
+// calibration zero
+DICENTRY(CALIBZERO,     0x6034, 0, 4, 1, "calibration zero")
+// encoder position
+DICENTRY(ENCPOS,        0x6035, 0, 4, 1, "encoder position")
+

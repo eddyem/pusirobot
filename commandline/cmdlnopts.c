@@ -75,6 +75,7 @@ static myoption cmdlnopts[] = {
     {"parse",   NEED_ARG,   NULL,   'p',    arg_string, APTR(&G.parsefile), _("file with SDO data to send to device")},
     {"check",   NEED_ARG,   NULL,   'k',    arg_string, APTR(&G.checkfile), _("check SDO data file")},
     {"disable", NO_ARGS,    NULL,   'D',    arg_int,    APTR(&G.disable),   _("disable motor")},
+    {"readvals",NO_ARGS,    NULL,   'R',    arg_int,    APTR(&G.showpars),  _("read values of used parameters")},
    end_option
 };
 
