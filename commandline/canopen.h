@@ -83,7 +83,7 @@ SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID);
 
 int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID);
 
-int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, uint8_t *data);
+int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data);
 int SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data);
 
 //int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID);

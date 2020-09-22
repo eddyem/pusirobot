@@ -66,8 +66,7 @@ static int read_ttyX(TTY_descr *d){
         l = 0;
         FD_ZERO(&rfds);
         FD_SET(d->comfd, &rfds);
-        // wait for 10ms
-        tv.tv_sec = 0; tv.tv_usec = 50000;
+        tv.tv_sec = 0; tv.tv_usec = 500;
         retval = select(d->comfd + 1, &rfds, NULL, NULL, &tv);
         if (!retval) break;
         if(FD_ISSET(d->comfd, &rfds)){
@@ -91,16 +90,18 @@ static int ttyWR(const char *buff, int len){
 #ifdef EBUG
     int _U_ n = write(STDERR_FILENO, buff, len);
     fprintf(stderr, "\n");
+    double t0 = dtime();
 #endif
     int w = write_tty(dev->comfd, buff, (size_t)len);
     if(!w) w = write_tty(dev->comfd, "\n", 1);
-    char *s = read_string(); // clear echo
+    DBG("Written, dt=%g", dtime() - t0);
+    char *s = read_string(); // clear echo & check
     if(!s || strcmp(s, buff) != 0){
         WARNX("wrong answer! Got '%s' instead of '%s'", s, buff);
         return 1;
     }
     pthread_mutex_unlock(&mutex);
-    DBG("Success");
+    DBG("Success, dt=%g", dtime() - t0);
     return w;
 }
 
@@ -113,8 +114,7 @@ void setserialspeed(int speed){
 }
 
 static void clearRXbuf(){
-    double t0 = dtime();
-    while(read_string() && dtime() - t0 < T_POLLING_TMOUT){usleep(1000);}
+    while(read_ttyX(dev));
 }
 
 int canbus_open(const char *devname){
@@ -194,7 +194,10 @@ static char *read_string(){
             }
             memcpy(ptr, dev->buf, dev->buflen);
             r += l; LL -= l; ptr += l;
-            if(ptr[-1] == '\n') break;
+            if(ptr[-1] == '\n'){
+                //DBG("Newline detected");
+                break;
+            }
             d0 = dtime();
         }
     }while(dtime() - d0 < WAIT_TMOUT && LL);
@@ -210,7 +213,7 @@ static char *read_string(){
             optr = NULL;
             return NULL;
         }
-        DBG("buf: %s", buf);
+        DBG("buf: %s, time: %g", buf, dtime() - d0);
         return buf;
     }
     return NULL;
@@ -225,7 +228,7 @@ CANmesg *parseCANmesg(const char *str){
     return &m;
 }
 
-#if 0
+#ifdef EBUG
 void showM(CANmesg *m){
     printf("TS=%d, ID=0x%X", m->timemark, m->ID);
     int l = m->len;
@@ -246,8 +249,10 @@ int canbus_read(CANmesg *mesg){
     while(dtime() - t0 < T_POLLING_TMOUT){ // read answer
         if((ans = read_string())){ // parse new data
             if((m = parseCANmesg(ans))){
-                //DBG("Got canbus message:");
-                //showM(m);
+                DBG("Got canbus message (dT=%g):", dtime() - t0);
+#ifdef EBUG
+                showM(m);
+#endif
                 if(ID && m->ID == ID){
                     memcpy(mesg, m, sizeof(CANmesg));
                     DBG("All OK");

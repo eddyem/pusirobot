@@ -76,6 +76,7 @@ static myoption cmdlnopts[] = {
     {"check",   NEED_ARG,   NULL,   'k',    arg_string, APTR(&G.checkfile), _("check SDO data file")},
     {"disable", NO_ARGS,    NULL,   'D',    arg_int,    APTR(&G.disable),   _("disable motor")},
     {"readvals",NO_ARGS,    NULL,   'R',    arg_int,    APTR(&G.showpars),  _("read values of used parameters")},
+    {"enablesw",NO_ARGS,    NULL,   'E',    arg_int,    APTR(&G.enableESW), _("enable end-switches 1 and 2")},
    end_option
 };
 

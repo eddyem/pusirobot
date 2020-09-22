@@ -49,6 +49,7 @@ typedef struct{
     int zeropos;            // set position to zero
     int disable;            // disable motor
     int showpars;           // show values of some parameters
+    int enableESW;          // send signal to enable end-switches
 } glob_pars;
 
 

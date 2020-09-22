@@ -259,8 +259,8 @@ int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
     return ans;
 }
 
-// write SDO data
-int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, uint8_t *data){
+// write SDO data, return 0 if all OK
+int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     if(!e || !data || e->datasize < 1 || e->datasize > 4){
         WARNX("SDO_write(): bad datalen");
         return 1;
@@ -300,7 +300,7 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, uint8_t *data){
     return 0;
 }
 
-int SDO_write(const SDO_dic_entry *e, _U_ uint8_t NID, int64_t data){
+int SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data){
     if(!e) return 1;
     uint8_t arr[4] = {0};
     uint32_t U;
