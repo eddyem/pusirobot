@@ -157,6 +157,7 @@ static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
 }
 
 static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
+    FNAME();
     CANmesg mesg;
     SDO *sdo = NULL;
     double t0 = dtime();
@@ -184,8 +185,9 @@ static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
  * @return SDO received or NULL if error
  */
 SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID){
+    FNAME();
     if(ask2read(idx, subidx, NID)){
-        WARNX("Can't initiate upload");
+        WARNX("readSDOvalue(): Can't initiate upload");
         return NULL;
     }
     return getSDOans(idx, subidx, NID);
@@ -217,16 +219,16 @@ static inline int8_t mki8(uint8_t data[4]){
 
 // read SDO value, if error - return INT64_MIN
 int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
+    FNAME();
     SDO *sdo = readSDOvalue(e->index, e->subindex, NID);
     if(!sdo){
-        WARNX("SDO read error");
         return INT64_MIN;
     }
     if(sdo->ccs == CCS_ABORT_TRANSFER){ // error
         WARNX("Got error for SDO 0x%X", e->index);
         uint32_t ac = mku32(sdo->data);
         const char *etxt = abortcode_text(ac);
-        if(etxt) red("Abort code 0x%X: ", ac, etxt);
+        if(etxt) WARNX("Abort code 0x%X: %s", ac, etxt);
         return INT64_MIN;
     }
     if(sdo->datalen != e->datasize){
@@ -261,6 +263,7 @@ int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
 
 // write SDO data, return 0 if all OK
 int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
+    FNAME();
     if(!e || !data || e->datasize < 1 || e->datasize > 4){
         WARNX("SDO_write(): bad datalen");
         return 1;
@@ -273,10 +276,12 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     sdo.index = e->index;
     sdo.subindex = e->subindex;
     CANmesg *mesgp = mkMesg(&sdo);
+    DBG("Canbus write..");
     if(canbus_write(mesgp)){
         WARNX("SDO_write(): Can't initiate download");
         return 2;
     }
+    DBG("get answer");
     SDO *sdop = getSDOans(e->index, e->subindex, NID);
     if(!sdop){
         WARNX("SDO_write(): SDO read error");

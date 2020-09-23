@@ -1,0 +1,8 @@
+#!/bin/bash
+
+while true; do
+	./steppermove -m100 -w -I4 -r 32
+	./steppermove -m200 -w -I4 -r -64
+	sleep 1
+done
+

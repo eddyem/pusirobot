@@ -22,6 +22,51 @@
 
 // heartbeat time
 DICENTRY(HEARTBTTIME,   0x1017, 0, 2, 0, "heartbeat time")
+
+// receive PDO parameter 0
+// largest subindex supported
+DICENTRY(RPDOP0LS,      0x1400, 0, 1, 0, "receive PDO parameter 0, largest subindex supported")
+// COB-ID used by PDO
+DICENTRY(RPDOP0CI,      0x1400, 1, 4, 0, "receive PDO parameter 0, COB-ID used by PDO")
+// transmission type
+DICENTRY(RPDOP0TT,      0x1400, 2, 1, 0, "receive PDO parameter 0, transmission type")
+// inhibit time
+DICENTRY(RPDOP0IT,      0x1400, 3, 2, 0, "receive PDO parameter 0, inhibit time")
+// compatibility entry
+DICENTRY(RPDOP0CE,      0x1400, 4, 1, 0, "receive PDO parameter 0, compatibility entry")
+// event timer
+DICENTRY(RPDOP0ET,      0x1400, 5, 2, 0, "receive PDO parameter 0, event timer")
+
+// receive PDO mapping 0
+// number of mapped application objects
+DICENTRY(RPDOM0N,       0x1600, 0, 1, 0, "receive PDO mapping 0, number of objects")
+// first map
+DICENTRY(RPDOM0O1,      0x1600, 1, 4, 0, "receive PDO mapping 0, mapping for 1st object")
+
+// transmit PDO parameter 0
+// largest subindex supported
+DICENTRY(TPDOP0LS,      0x1800, 0, 1, 0, "transmit PDO parameter 0, largest subindex supported")
+// COB-ID used by PDO
+DICENTRY(TPDOP0CI,      0x1800, 1, 4, 0, "transmit PDO parameter 0, COB-ID used by PDO")
+// transmission type
+DICENTRY(TPDOP0TT,      0x1800, 2, 1, 0, "transmit PDO parameter 0, transmission type")
+// inhibit time
+DICENTRY(TPDOP0IT,      0x1800, 3, 2, 0, "transmit PDO parameter 0, inhibit time")
+// reserved
+DICENTRY(TPDOP0R,       0x1800, 4, 1, 0, "transmit PDO parameter 0, reserved")
+// event timer
+DICENTRY(TPDOP0ET,      0x1800, 5, 2, 0, "transmit PDO parameter 0, event timer")
+
+// transmit PDO mapping 0
+// number of mapped application objects
+DICENTRY(TPDOM0N,       0x1A00, 0, 1, 0, "transmit PDO mapping 0, number of objects")
+// first map
+DICENTRY(TPDOM0O1,      0x1A00, 1, 4, 0, "transmit PDO mapping 0, mapping for 1st object")
+DICENTRY(TPDOM0O2,      0x1A00, 2, 4, 0, "transmit PDO mapping 0, mapping for 2nd object")
+DICENTRY(TPDOM0O3,      0x1A00, 3, 4, 0, "transmit PDO mapping 0, mapping for 3rd object")
+DICENTRY(TPDOM0O4,      0x1A00, 4, 4, 0, "transmit PDO mapping 0, mapping for 4th object")
+DICENTRY(TPDOM0O5,      0x1A00, 5, 4, 0, "transmit PDO mapping 0, mapping for 5th object")
+
 // node ID
 DICENTRY(NODEID,        0x2002, 0, 1, 0, "node ID")
 // baudrate

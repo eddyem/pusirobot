@@ -38,6 +38,7 @@ int canbus_open(const char *devname);
 int canbus_write(CANmesg *mesg);
 int canbus_read(CANmesg *mesg);
 int canbus_setspeed(int speed);
+void canbus_clear();
 
 // auxiliary (not necessary) functions
 void setserialspeed(int speed);

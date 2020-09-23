@@ -77,6 +77,7 @@ static myoption cmdlnopts[] = {
     {"disable", NO_ARGS,    NULL,   'D',    arg_int,    APTR(&G.disable),   _("disable motor")},
     {"readvals",NO_ARGS,    NULL,   'R',    arg_int,    APTR(&G.showpars),  _("read values of used parameters")},
     {"enablesw",NO_ARGS,    NULL,   'E',    arg_int,    APTR(&G.enableESW), _("enable end-switches 1 and 2")},
+    {"wait",    NO_ARGS,    NULL,   'w',    arg_int,    APTR(&G.wait),      _("wait while motor is busy")},
    end_option
 };
 

@@ -54,6 +54,7 @@ static char *read_string();
  * @return amount of bytes read
  */
 static int read_ttyX(TTY_descr *d){
+    FNAME();
     if(!d || d->comfd < 0) return -1;
     size_t L = 0;
     ssize_t l;
@@ -85,7 +86,10 @@ static int read_ttyX(TTY_descr *d){
 
 // thread-safe writing, add trailing '\n'
 static int ttyWR(const char *buff, int len){
+    FNAME();
     pthread_mutex_lock(&mutex);
+    //canbus_clear();
+    read_string(); // clear RX buffer
     DBG("Write 2tty %d bytes: ", len);
 #ifdef EBUG
     int _U_ n = write(STDERR_FILENO, buff, len);
@@ -95,10 +99,16 @@ static int ttyWR(const char *buff, int len){
     int w = write_tty(dev->comfd, buff, (size_t)len);
     if(!w) w = write_tty(dev->comfd, "\n", 1);
     DBG("Written, dt=%g", dtime() - t0);
-    char *s = read_string(); // clear echo & check
-    if(!s || strcmp(s, buff) != 0){
-        WARNX("wrong answer! Got '%s' instead of '%s'", s, buff);
-        return 1;
+    int errctr = 0;
+    while(1){
+        char *s = read_string(); // clear echo & check
+        if(!s || strncmp(s, buff, strlen(buff)) != 0){
+            if(++errctr > 3){
+                WARNX("wrong answer! Got '%s' instead of '%s'", s, buff);
+                w = 1;
+                break;
+            }
+        }else break;
     }
     pthread_mutex_unlock(&mutex);
     DBG("Success, dt=%g", dtime() - t0);
@@ -113,7 +123,7 @@ void setserialspeed(int speed){
     serialspeed = speed;
 }
 
-static void clearRXbuf(){
+void canbus_clear(){
     while(read_ttyX(dev));
 }
 
@@ -143,11 +153,13 @@ int canbus_setspeed(int speed){
     }
     int len = snprintf(buff, BUFLEN, "b %d", speed);
     if(len < 1) return 2;
-    clearRXbuf();
-    return ttyWR(buff, len);
+    int r = ttyWR(buff, len);
+    read_string(); // clear RX buf ('Reinit CAN bus with speed XXXXkbps')
+    return r;
 }
 
 int canbus_write(CANmesg *mesg){
+    FNAME();
     char buf[BUFLEN];
     if(!mesg || mesg->len > 8) return 1;
     int rem = BUFLEN, len = 0;
@@ -158,7 +170,7 @@ int canbus_write(CANmesg *mesg){
         rem -= l; len += l;
         if(rem < 0) return 2;
     }
-    clearRXbuf();
+    canbus_clear();
     return ttyWR(buf, len);
 }
 
@@ -167,6 +179,7 @@ int canbus_write(CANmesg *mesg){
  * @return NULL if nothing was read or pointer to static buffer
  */
 static char *read_string(){
+    FNAME();
     static char buf[1024];
     int LL = 1023, r = 0, l;
     char *ptr = NULL;

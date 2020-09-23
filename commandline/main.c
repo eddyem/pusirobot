@@ -16,7 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "dataparser.h"
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,11 +26,13 @@
 #include "canbus.h"
 #include "canopen.h"
 #include "cmdlnopts.h"
+#include "dataparser.h"
 #include "pusirobot.h"
 
 static glob_pars *GP = NULL;  // for GP->pidfile need in `signals`
 static uint8_t ID = 0;
 static uint16_t microstepping = 0;
+static uint8_t devstat = 0; // device status after chkstat()
 
 // default signal handler
 void signals(int sig){
@@ -66,15 +67,15 @@ static inline void chkerr(int64_t es){
 static inline void chkstat(int64_t es){
     if(es) red("DEVSTATUS=%d\n", (int)es);
     else green("DEVSTATUS=0\n");
-    uint8_t s = (uint8_t)es;
-    if(s){
+    devstat = (uint8_t)es;
+    if(devstat){
         for(uint8_t i = 0; i < 8; ++i){
-            const char *msg = devstatus(s, i);
+            const char *msg = devstatus(devstat, i);
             if(msg) red("\t%s\n", msg);
         }
-        if(s != BUSY_STATE && GP->clearerr && (SDO_write(&DEVSTATUS, ID, s) || 0 != (es = SDO_read(&DEVSTATUS, ID)))){
+        if(devstat != BUSY_STATE && GP->clearerr && (SDO_write(&DEVSTATUS, ID, devstat) || 0 != (es = SDO_read(&DEVSTATUS, ID)))){
             ERRX("Can't clean device status");
-        }
+        }else devstat = (uint8_t)es;
         if(es && es != BUSY_STATE) ERRX("Can't work in this state"); // DIE if !busy
     }
 }
@@ -122,7 +123,7 @@ static inline void gpioval(int64_t es){
 
 // show values of all parameters from dicentries.in
 static inline void showAllPars(){
-    green("\nParameters' values:");
+    green("\nParameters' values:\n");
     for(int i = 0; i < DEsz; ++i){
         const SDO_dic_entry *entry = allrecords[i];
         int64_t val = SDO_read(entry, GP->NodeID);
@@ -131,10 +132,35 @@ static inline void showAllPars(){
                   entry->index, entry->subindex, entry->name);
             continue;
         }
-        printf("\n# %s\n0x%04X, %d, %ld", entry->name, entry->index,
+        printf("# %s\n0x%04X, %d, %ld\n", entry->name, entry->index,
                entry->subindex, val);
+        fflush(stdout);
     }
     printf("\n\n");
+}
+
+// wait while device is in busy state
+static inline void wait_busy(){
+    int errctr = 0;
+    int64_t ans;
+    int i = 0;
+    const char symbols[] = "|/-\\";
+    printf("Waiting... ");
+    do{
+        printf("%c\b", symbols[i]);
+        fflush(stdout);
+        if(++i > 3) i = 0;
+        if(INT64_MIN == (ans = SDO_read(&DEVSTATUS, ID))){
+            if(++errctr > 10) ERRX("Can't read device status");
+        }else errctr = 0;
+        if(ans == BUSY_STATE){
+            usleep(50000);
+        }else{
+            chkstat(ans);
+            break;
+        }
+    }while(1);
+    printf("\n");
 }
 
 int main(int argc, char *argv[]){
@@ -151,6 +177,7 @@ int main(int argc, char *argv[]){
     signal(SIGINT, signals);  // ctrl+C - quit
     signal(SIGQUIT, signals); // ctrl+\ - quit
     signal(SIGTSTP, SIG_IGN); // ignore ctrl+Z
+
     if(GP->NodeID != 1){
         if(GP->NodeID < 1 || GP->NodeID > 127) ERRX("Node ID should be a number from 1 to 127");
     }
@@ -175,6 +202,7 @@ int main(int argc, char *argv[]){
         putlog("Can't set CAN speed %d. Exit.", GP->canspeed);
         signals(2);
     }
+    DBG("here");
 
     //setup_con();
     // print current position and state
@@ -185,45 +213,39 @@ int main(int argc, char *argv[]){
 
 #define Mesg(...)
 //#define Mesg(...)    green(__VA_ARGS__)
-    //double d0 = dtime();
+//double d0 = dtime();
 
     getSDOe(ERRSTATE, chkerr, "Can't get error status");
     Mesg("ERRSTATE: %g\n", dtime() - d0);
+
+    if(GP->stop){
+        if(SDO_write(&STOP, ID, 1)) ERRX("Can't stop motor");
+        Mesg("STOP: %g\n", dtime() - d0);
+    }
+
     getSDOe(DEVSTATUS, chkstat, "Can't get device status");
     Mesg("DEVSTATUS: %g\n", dtime() - d0);
-    if(GP->parsefile){
-        green("Try to parse %s and send SDOs to device\n", GP->parsefile);
-        parse_data_file(GP->parsefile, GP->NodeID);
-        Mesg("parse_data_file: %g\n", dtime() - d0);
+
+    if(GP->zeropos){
+        if(SDO_write(&POSITION, ID, 0))
+            ERRX("Can't clear position counter");
+            Mesg("POSITION: %g\n", dtime() - d0);
     }
+
+    getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
+    Mesg("MICROSTEPS: %g\n", dtime() - d0);
+
+    if(INT64_MIN != (i64 = SDO_read(&POSITION, ID)))
+        green("CURPOS=%d\n", (int)i64/microstepping);
+    else WARNX("Can't read current position");
+    Mesg("CURPOS: %g\n", dtime() - d0);
 
     if(GP->showpars){
         showAllPars();
         Mesg("showAllPars: %g\n", dtime() - d0);
     }
 
-    if(GP->enableESW){
-        if(SDO_write(&EXTENABLE, ID, 3)){
-            WARNX("Error when trying to enable limit switches");
-            if(GP->absmove || GP->relmove) signals(-1);
-        }
-        Mesg("EXTENABLE: %g\n", dtime() - d0);
-    }
-
-    getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
-    Mesg("MICROSTEPS: %g\n", dtime() - d0);
-    if(GP->zeropos){
-        if(SDO_write(&POSITION, ID, 0))
-            ERRX("Can't clear position counter");
-            Mesg("POSITION: %g\n", dtime() - d0);
-    }
-    if(INT64_MIN != (i64 = SDO_read(&POSITION, ID)))
-        green("CURPOS=%d\n", (int)i64/microstepping);
-    else WARNX("Can't read current position");
-    Mesg("CURPOS: %g\n", dtime() - d0);
-    getSDOe(MAXSPEED, setmaxspd, "Can't read max speed");
-    Mesg("MAXSPEED: %g\n", dtime() - d0);
-    getSDOw(GPIOVAL, gpioval, "Can't read GPIO values");
+    getSDOe(GPIOVAL, gpioval, "Can't read GPIO values");
     Mesg("GPIOVAL: %g\n", dtime() - d0);
 
     if(GP->disable){
@@ -237,18 +259,34 @@ int main(int argc, char *argv[]){
         Mesg("Status: %g\n", dtime() - d0);
     }
 
-    if(GP->stop){
-        if(SDO_write(&STOP, ID, 1)) ERRX("Can't stop motor");
-        Mesg("STOP: %g\n", dtime() - d0);
+    if(devstat == BUSY_STATE && GP->wait) wait_busy();
+
+    if(GP->parsefile){
+        green("Try to parse %s and send SDOs to device\n", GP->parsefile);
+        parse_data_file(GP->parsefile, GP->NodeID);
+        Mesg("parse_data_file: %g\n", dtime() - d0);
     }
 
+    if(GP->enableESW){
+        if(SDO_write(&EXTENABLE, ID, 3)){
+            WARNX("Error when trying to enable limit switches");
+            if(GP->absmove || GP->relmove) signals(-1);
+        }
+        Mesg("EXTENABLE: %g\n", dtime() - d0);
+    }
+
+    getSDOe(MAXSPEED, setmaxspd, "Can't read max speed");
+    Mesg("MAXSPEED: %g\n", dtime() - d0);
+
     if(GP->absmove != INT_MIN){
+        if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
         SDO_write(&ENABLE, ID, 1);
         if(SDO_write(&ABSSTEPS, ID, GP->absmove*microstepping))
             ERRX("Can't move to absolute position %d", GP->absmove);
         Mesg("AbsMove: %g\n", dtime() - d0);
     }
     if(GP->relmove != INT_MIN && GP->relmove){
+        if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
         uint8_t dir = 1;
         SDO_write(&ENABLE, ID, 1);
         if(GP->relmove < 0){ // negative direction
