@@ -147,7 +147,7 @@ int canbus_open(const char *devname){
 int canbus_setspeed(int speed){
     if(speed == 0) return 0; // default - not change
     char buff[BUFLEN];
-    if(speed<10 || speed>3000){
+    if(speed < 10 || speed > 3000){
         WARNX("Wrong CAN bus speed value: %d", speed);
         return 1;
     }

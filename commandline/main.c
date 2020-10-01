@@ -132,8 +132,8 @@ static inline void showAllPars(){
                   entry->index, entry->subindex, entry->name);
             continue;
         }
-        printf("# %s\n0x%04X, %d, %ld\n", entry->name, entry->index,
-               entry->subindex, val);
+        printf("# %s\n0x%04X, %d, %ld (0x%lX)\n", entry->name, entry->index,
+               entry->subindex, val, val);
         fflush(stdout);
     }
     printf("\n\n");
@@ -196,15 +196,13 @@ int main(int argc, char *argv[]){
     setserialspeed(GP->serialspeed);
     if(canbus_open(GP->device)){
         putlog("Can't open %s @ speed %d. Exit.", GP->device, GP->serialspeed);
-        signals(1);
+        ERRX("Can't open %s @ speed %d. Exit.", GP->device, GP->serialspeed);
     }
     if(canbus_setspeed(GP->canspeed)){
         putlog("Can't set CAN speed %d. Exit.", GP->canspeed);
-        signals(2);
+        ERRX("Can't set CAN speed %d. Exit.", GP->canspeed);
     }
-    DBG("here");
 
-    //setup_con();
     // print current position and state
     int64_t i64;
     ID = GP->NodeID;
@@ -215,58 +213,63 @@ int main(int argc, char *argv[]){
 //#define Mesg(...)    green(__VA_ARGS__)
 //double d0 = dtime();
 
-    getSDOe(ERRSTATE, chkerr, "Can't get error status");
-    Mesg("ERRSTATE: %g\n", dtime() - d0);
-
+    // get mircostepping (need this to properly calculate current position and move
+    getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
+    Mesg("MICROSTEPS: %g\n", dtime() - d0);
+    if(!GP->quick){
+        // check error status
+        getSDOe(ERRSTATE, chkerr, "Can't get error status");
+        Mesg("ERRSTATE: %g\n", dtime() - d0);
+        // get current position
+        if(INT64_MIN != (i64 = SDO_read(&POSITION, ID)))
+            green("CURPOS=%d\n", (int)i64/microstepping);
+        else WARNX("Can't read current position");
+        Mesg("CURPOS: %g\n", dtime() - d0);
+        // get limit switches values
+        getSDOe(GPIOVAL, gpioval, "Can't read GPIO values");
+        Mesg("GPIOVAL: %g\n", dtime() - d0);
+        // get motor power status
+        if(INT64_MIN != (i64 = SDO_read(&ENABLE, ID))){
+            if(i64) green("ENABLE=1\n");
+            else red("ENABLE=0\n");
+            Mesg("Status: %g\n", dtime() - d0);
+        }
+        // get max speed
+        getSDOe(MAXSPEED, setmaxspd, "Can't read max speed");
+        Mesg("MAXSPEED: %g\n", dtime() - d0);
+    }
+    // check device status
+    getSDOe(DEVSTATUS, chkstat, "Can't get device status");
+    Mesg("DEVSTATUS: %g\n", dtime() - d0);
+    if(devstat == BUSY_STATE && GP->wait) wait_busy();
+    // stop motor
     if(GP->stop){
         if(SDO_write(&STOP, ID, 1)) ERRX("Can't stop motor");
         Mesg("STOP: %g\n", dtime() - d0);
     }
-
-    getSDOe(DEVSTATUS, chkstat, "Can't get device status");
-    Mesg("DEVSTATUS: %g\n", dtime() - d0);
-
+    // turn off motor power
+    if(GP->disable){
+        if(SDO_write(&ENABLE, ID, 0)) ERRX("Can't disable motor");
+        Mesg("DISABLE: %g\n", dtime() - d0);
+    }
+    // zero position
     if(GP->zeropos){
         if(SDO_write(&POSITION, ID, 0))
             ERRX("Can't clear position counter");
             Mesg("POSITION: %g\n", dtime() - d0);
     }
-
-    getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
-    Mesg("MICROSTEPS: %g\n", dtime() - d0);
-
-    if(INT64_MIN != (i64 = SDO_read(&POSITION, ID)))
-        green("CURPOS=%d\n", (int)i64/microstepping);
-    else WARNX("Can't read current position");
-    Mesg("CURPOS: %g\n", dtime() - d0);
-
+    // show values of all known CanOpen parameters
     if(GP->showpars){
         showAllPars();
         Mesg("showAllPars: %g\n", dtime() - d0);
     }
-
-    getSDOe(GPIOVAL, gpioval, "Can't read GPIO values");
-    Mesg("GPIOVAL: %g\n", dtime() - d0);
-
-    if(GP->disable){
-        if(SDO_write(&ENABLE, ID, 0)) ERRX("Can't disable motor");
-        Mesg("DISABLE: %g\n", dtime() - d0);
-    }
-
-    if(INT64_MIN != (i64 = SDO_read(&ENABLE, ID))){
-        if(i64) green("ENABLE=1\n");
-        else red("ENABLE=0\n");
-        Mesg("Status: %g\n", dtime() - d0);
-    }
-
-    if(devstat == BUSY_STATE && GP->wait) wait_busy();
-
+    // send values from external configuration file
     if(GP->parsefile){
         green("Try to parse %s and send SDOs to device\n", GP->parsefile);
         parse_data_file(GP->parsefile, GP->NodeID);
         Mesg("parse_data_file: %g\n", dtime() - d0);
     }
-
+    // enable limit switches
     if(GP->enableESW){
         if(SDO_write(&EXTENABLE, ID, 3)){
             WARNX("Error when trying to enable limit switches");
@@ -274,10 +277,7 @@ int main(int argc, char *argv[]){
         }
         Mesg("EXTENABLE: %g\n", dtime() - d0);
     }
-
-    getSDOe(MAXSPEED, setmaxspd, "Can't read max speed");
-    Mesg("MAXSPEED: %g\n", dtime() - d0);
-
+    // move to absolute position
     if(GP->absmove != INT_MIN){
         if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
         SDO_write(&ENABLE, ID, 1);

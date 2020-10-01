@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "Usage: $0 <steps>"
+	exit 1
+fi
+
+STEPS=$1
+NEGSTEPS=$((-$1))
+
+echo "Move focus to $STEPS steps"
+
+./steppermove -qI1 -r $NEGSTEPS
+./steppermove -qI2 -r $STEPS
+./steppermove -qI3 -r $STEPS
+

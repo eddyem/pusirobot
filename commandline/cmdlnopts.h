@@ -51,6 +51,7 @@ typedef struct{
     int showpars;           // show values of some parameters
     int enableESW;          // send signal to enable end-switches
     int wait;               // wait while device is busy
+    int quick;              // directly send command without getting status
 } glob_pars;
 
 

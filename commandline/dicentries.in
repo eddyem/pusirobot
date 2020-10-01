@@ -117,6 +117,9 @@ DICENTRY(GPIOCONF,      0x6011, 2, 4, 0, "GPIO configuration")
 DICENTRY(GPIOVAL,       0x6012, 0, 2, 0, "GPIO value")
 // stall parameters
 DICENTRY(STALLPARS,     0x6017, 0, 2, 0, "stall parameters (open loop)")
+// offline operation
+DICENTRY(OFFLNMBR,      0x6018, 1, 1, 0, "Number of offline programming command")
+DICENTRY(OFFLENBL,      0x6018, 2, 1, 0, "Offline automatic operation enable")
 // stall set
 DICENTRY(STALLSET,      0x601B, 0, 1, 0, "stall set (open loop)")
 // absolute displacement

@@ -60,8 +60,8 @@ static myoption cmdlnopts[] = {
 // common options
     {"help",    NO_ARGS,    NULL,   'h',    arg_int,    APTR(&help),        _("show this help")},
     {"device",  NEED_ARG,   NULL,   'd',    arg_string, APTR(&G.device),    _("serial device name (default: " DEFAULT_PORTDEV ")")},
-    {"canspd",  NEED_ARG,   NULL,   's',    arg_int,    APTR(&G.canspeed),  _("CAN bus speed (default: " STR(DEFAULT_SPEED) ")")},
-    {"serialspd",NEED_ARG,  NULL,   't',    arg_int,    APTR(&G.serialspeed),_("serial (tty) device speed (default: " STR(DEFAULT_SPEED) ")")},
+    {"canspd",  NEED_ARG,   NULL,   's',    arg_int,    APTR(&G.canspeed),  _("CAN bus speed")},
+    {"serialspd",NEED_ARG,  NULL,   't',    arg_int,    APTR(&G.serialspeed),_("serial (tty) device speed (default: " STR(DEFAULT_SER_SPEED) ")")},
     {"logfile", NEED_ARG,   NULL,   'l',    arg_string, APTR(&G.logfile),   _("file to save logs")},
     {"pidfile", NEED_ARG,   NULL,   'P',    arg_string, APTR(&G.pidfile),   _("pidfile (default: " DEFAULT_PIDFILE ")")},
     {"nodeid",  NEED_ARG,   NULL,   'I',    arg_int,    APTR(&G.NodeID),    _("node ID (1..127)")},
@@ -78,6 +78,7 @@ static myoption cmdlnopts[] = {
     {"readvals",NO_ARGS,    NULL,   'R',    arg_int,    APTR(&G.showpars),  _("read values of used parameters")},
     {"enablesw",NO_ARGS,    NULL,   'E',    arg_int,    APTR(&G.enableESW), _("enable end-switches 1 and 2")},
     {"wait",    NO_ARGS,    NULL,   'w',    arg_int,    APTR(&G.wait),      _("wait while motor is busy")},
+    {"quick",   NO_ARGS,    NULL,   'q',    arg_int,    APTR(&G.quick),     _("directly send command without getting status")},
    end_option
 };
 
