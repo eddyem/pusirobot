@@ -1,0 +1,22 @@
+#!/bin/bash
+
+Ampl=$1
+
+./steppermove -s250
+./steppermove -I1 -m4000
+./steppermove -I2 -m4000
+
+#if false; then
+./steppermove -I2 -qr-3000
+./steppermove -I1 -qr-3000
+./steppermove -I2 -qw -r500
+./steppermove -I1 -qr500
+./steppermove -I2 -qw
+#fi
+
+while true; do
+./steppermove -I2 -qwr${Ampl}
+./steppermove -I1 -qr${Ampl}
+./steppermove -I2 -qwr-${Ampl}
+./steppermove -I1 -qr-${Ampl}
+done

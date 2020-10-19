@@ -82,12 +82,17 @@ static inline void chkstat(int64_t es){
 
 // setup microstepping
 static inline void setusteps(int64_t es){
-    if(GP->microsteps > -1 && GP->microsteps != (int) es){
+    DBG("es=%zd", es);
+    int us = GP->microsteps;
+    if(us > 0){
+        if(us == 1) us = 0; // PusiRobot driver needs value 0 for microstepping 1!
+        if(us != (int) es){ // change microstepping
         DBG("Try to change microsteps");
-        if(SDO_write(&MICROSTEPS, ID, GP->microsteps) || INT64_MIN == (es = SDO_read(&MICROSTEPS, ID)))
+        if(SDO_write(&MICROSTEPS, ID, us) || INT64_MIN == (es = SDO_read(&MICROSTEPS, ID)))
             ERRX("Can't change microstepping");
+        }
     }
-    microstepping = (uint16_t) es;
+    microstepping = es > 0 ? (uint16_t) es : 1;
     green("MICROSTEPPING=%u\n", microstepping);
 }
 
@@ -181,8 +186,9 @@ int main(int argc, char *argv[]){
     if(GP->NodeID != 1){
         if(GP->NodeID < 1 || GP->NodeID > 127) ERRX("Node ID should be a number from 1 to 127");
     }
-    if(GP->microsteps > 0 && (1 != __builtin_popcount(GP->microsteps) || GP->microsteps == 1)) // __builtin_popcount - amount of non-zero bits in uint
-        ERRX("Wrong microstepping settings, should be 0 or 2^(1..8)");
+    DBG("builtin: %d", __builtin_popcount(GP->microsteps));
+    if(GP->microsteps > 0 && (1 != __builtin_popcount(GP->microsteps))) // __builtin_popcount - amount of non-zero bits in uint
+        ERRX("Wrong microstepping settings, should be 2^(0..8)");
     if(GP->absmove != INT_MIN || GP->relmove != INT_MIN){ // wanna move
         if(GP->absmove != INT_MIN && GP->relmove != INT_MIN)
             ERRX("ABSMOVE and RELMOVE can't be used together");
@@ -214,15 +220,21 @@ int main(int argc, char *argv[]){
 //double d0 = dtime();
 
     // get mircostepping (need this to properly calculate current position and move
-    getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
-    Mesg("MICROSTEPS: %g\n", dtime() - d0);
+    if(GP->fracsteps) microstepping = 1; // Don't calculate microstepping in this case
+    else{
+        getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
+        Mesg("MICROSTEPS: %g\n", dtime() - d0);
+    }
     if(!GP->quick){
         // check error status
         getSDOe(ERRSTATE, chkerr, "Can't get error status");
         Mesg("ERRSTATE: %g\n", dtime() - d0);
         // get current position
-        if(INT64_MIN != (i64 = SDO_read(&POSITION, ID)))
-            green("CURPOS=%d\n", (int)i64/microstepping);
+        if(INT64_MIN != (i64 = SDO_read(&POSITION, ID))){
+            int enc = (int)i64;
+            green("CURENCODER=%d\n", enc);
+            green("CURSTEPS=%.2f\n", enc / ((double)microstepping));
+        }
         else WARNX("Can't read current position");
         Mesg("CURPOS: %g\n", dtime() - d0);
         // get limit switches values
@@ -238,10 +250,12 @@ int main(int argc, char *argv[]){
         getSDOe(MAXSPEED, setmaxspd, "Can't read max speed");
         Mesg("MAXSPEED: %g\n", dtime() - d0);
     }
-    // check device status
-    getSDOe(DEVSTATUS, chkstat, "Can't get device status");
-    Mesg("DEVSTATUS: %g\n", dtime() - d0);
-    if(devstat == BUSY_STATE && GP->wait) wait_busy();
+    if(GP->absmove != INT_MIN || GP->relmove != INT_MIN || !GP->quick || GP->wait){
+        // check device status
+        getSDOe(DEVSTATUS, chkstat, "Can't get device status");
+        Mesg("DEVSTATUS: %g\n", dtime() - d0);
+        if(devstat == BUSY_STATE && GP->wait) wait_busy();
+    }
     // stop motor
     if(GP->stop){
         if(SDO_write(&STOP, ID, 1)) ERRX("Can't stop motor");
@@ -271,19 +285,28 @@ int main(int argc, char *argv[]){
     }
     // enable limit switches
     if(GP->enableESW){
-        if(SDO_write(&EXTENABLE, ID, 3)){
+        if(SDO_write(&EXTENABLE, ID, GP->enableESW)){
             WARNX("Error when trying to enable limit switches");
             if(GP->absmove || GP->relmove) signals(-1);
         }
         Mesg("EXTENABLE: %g\n", dtime() - d0);
     }
+    // disable limit switches
+    if(GP->disableESW){
+        if(SDO_write(&EXTENABLE, ID, 0)){
+            WARNX("Error when trying to disable limit switches");
+            if(GP->absmove || GP->relmove) signals(-1);
+        }
+    }
+    //int64_t es = SDO_read(&EXTENABLE, ID);
+    //green("LIMITSW=%lld\n", es);
+    int multiplier = GP->fracsteps ? 1 : microstepping;
     // move to absolute position
     if(GP->absmove != INT_MIN){
         if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
         SDO_write(&ENABLE, ID, 1);
-        if(SDO_write(&ABSSTEPS, ID, GP->absmove*microstepping))
+        if(SDO_write(&ABSSTEPS, ID, GP->absmove * multiplier))
             ERRX("Can't move to absolute position %d", GP->absmove);
-        Mesg("AbsMove: %g\n", dtime() - d0);
     }
     if(GP->relmove != INT_MIN && GP->relmove){
         if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
@@ -296,7 +319,7 @@ int main(int argc, char *argv[]){
         if(SDO_write(&ROTDIR, ID, dir) || INT64_MIN == (i64 = SDO_read(&ROTDIR, ID)))
             ERRX("Can't change rotation direction");
         DBG("i64=%ld, dir=%d", i64, dir);
-        if(SDO_write(&RELSTEPS, ID, GP->relmove*microstepping))
+        if(SDO_write(&RELSTEPS, ID, GP->relmove * multiplier))
             ERRX("Can't move to relative position %d", GP->relmove);
         Mesg("RelMove: %g\n", dtime() - d0);
     }

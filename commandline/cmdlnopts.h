@@ -50,8 +50,10 @@ typedef struct{
     int disable;            // disable motor
     int showpars;           // show values of some parameters
     int enableESW;          // send signal to enable end-switches
+    int disableESW;         // --//-- disable
     int wait;               // wait while device is busy
     int quick;              // directly send command without getting status
+    int fracsteps;          // move in steps fractions instead of full steps
 } glob_pars;
 
 

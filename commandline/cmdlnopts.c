@@ -66,9 +66,9 @@ static myoption cmdlnopts[] = {
     {"pidfile", NEED_ARG,   NULL,   'P',    arg_string, APTR(&G.pidfile),   _("pidfile (default: " DEFAULT_PIDFILE ")")},
     {"nodeid",  NEED_ARG,   NULL,   'I',    arg_int,    APTR(&G.NodeID),    _("node ID (1..127)")},
     {"microsteps", NEED_ARG,NULL,   'u',    arg_int,    APTR(&G.microsteps),_("microstepping (0..256)")},
-    {"rel",     NEED_ARG,   NULL,   'r',    arg_int,    APTR(&G.relmove),   _("move to relative position (steps)")},
-    {"abs",     NEED_ARG,   NULL,   'a',    arg_int,    APTR(&G.absmove),   _("move to absolute position (steps)")},
-    {"maxspd",  NEED_ARG,   NULL,   'm',    arg_int,    APTR(&G.maxspeed),  _("maximal motor speed (steps per second)")},
+    {"rel",     NEED_ARG,   NULL,   'r',    arg_int,    APTR(&G.relmove),   _("move to relative position (full steps)")},
+    {"abs",     NEED_ARG,   NULL,   'a',    arg_int,    APTR(&G.absmove),   _("move to absolute position (full steps)")},
+    {"maxspd",  NEED_ARG,   NULL,   'm',    arg_int,    APTR(&G.maxspeed),  _("maximal motor speed (full steps per second)")},
     {"stop",    NO_ARGS,    NULL,   'S',    arg_int,    APTR(&G.stop),      _("stop motor")},
     {"clearerr",NO_ARGS,    NULL,   'c',    arg_int,    APTR(&G.clearerr),  _("clear errors")},
     {"zeropos", NO_ARGS,    NULL,   '0',    arg_int,    APTR(&G.zeropos),   _("set current position to zero")},
@@ -76,9 +76,11 @@ static myoption cmdlnopts[] = {
     {"check",   NEED_ARG,   NULL,   'k',    arg_string, APTR(&G.checkfile), _("check SDO data file")},
     {"disable", NO_ARGS,    NULL,   'D',    arg_int,    APTR(&G.disable),   _("disable motor")},
     {"readvals",NO_ARGS,    NULL,   'R',    arg_int,    APTR(&G.showpars),  _("read values of used parameters")},
-    {"enablesw",NO_ARGS,    NULL,   'E',    arg_int,    APTR(&G.enableESW), _("enable end-switches 1 and 2")},
+    {"enablesw",NEED_ARG,   NULL,   'E',    arg_int,    APTR(&G.enableESW), _("enable end-switches with given mask")},
+    {"disablesw",NO_ARGS,   NULL,   'A',    arg_int,    APTR(&G.disableESW),_("disable end-switches")},
     {"wait",    NO_ARGS,    NULL,   'w',    arg_int,    APTR(&G.wait),      _("wait while motor is busy")},
     {"quick",   NO_ARGS,    NULL,   'q',    arg_int,    APTR(&G.quick),     _("directly send command without getting status")},
+    {"fracsteps",NO_ARGS,   NULL,   'F',    arg_int,    APTR(&G.fracsteps), _("move to steps fractions amount instead of full steps")},
    end_option
 };
 

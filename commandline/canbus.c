@@ -54,7 +54,6 @@ static char *read_string();
  * @return amount of bytes read
  */
 static int read_ttyX(TTY_descr *d){
-    FNAME();
     if(!d || d->comfd < 0) return -1;
     size_t L = 0;
     ssize_t l;
@@ -179,7 +178,6 @@ int canbus_write(CANmesg *mesg){
  * @return NULL if nothing was read or pointer to static buffer
  */
 static char *read_string(){
-    FNAME();
     static char buf[1024];
     int LL = 1023, r = 0, l;
     char *ptr = NULL;
@@ -252,7 +250,6 @@ void showM(CANmesg *m){
 #endif
 
 int canbus_read(CANmesg *mesg){
-    FNAME();
     if(!mesg) return 1;
     pthread_mutex_lock(&mutex);
     double t0 = dtime();
