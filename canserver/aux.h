@@ -22,7 +22,39 @@
 
 #include "cmdlnopts.h"
 
-extern glob_pars *GP;
+typedef enum{
+    LOGLEVEL_NONE,  // no logs
+    LOGLEVEL_ERR,   // only errors
+    LOGLEVEL_WARN,  // only warnings and errors
+    LOGLEVEL_MSG,   // all without debug
+    LOGLEVEL_DBG,   // all messages
+    LOGLEVEL_ANY    // all shit
+} Cl_loglevel;
+
+typedef struct{
+    char *logpath;          // full path to logfile
+    Cl_loglevel loglevel;   // loglevel
+    pthread_mutex_t mutex;  // log mutex
+} Cl_log;
+
+extern Cl_log *globlog; // global log file
+
+Cl_log *Cl_createlog(const char *logpath, Cl_loglevel level);
+#define OPENLOG(nm, lvl)   (globlog = Cl_createlog(nm, lvl))
+void Cl_deletelog(Cl_log **log);
+int Cl_putlogt(int timest, Cl_log *log, Cl_loglevel lvl, const char *fmt, ...);
+// shortcuts for different log levels; ..ADD - add message without timestamp
+#define LOGERR(...)     do{Cl_putlogt(1, globlog, LOGLEVEL_ERR, __VA_ARGS__);}while(0)
+#define LOGERRADD(...)  do{Cl_putlogt(1, globlog, LOGLEVEL_ERR, __VA_ARGS__);}while(0)
+#define LOGWARN(...)    do{Cl_putlogt(1, globlog, LOGLEVEL_WARN, __VA_ARGS__);}while(0)
+#define LOGWARNADD(...) do{Cl_putlogt(0, globlog, LOGLEVEL_WARN, __VA_ARGS__);}while(0)
+#define LOGMSG(...)     do{Cl_putlogt(1, globlog, LOGLEVEL_MSG, __VA_ARGS__);}while(0)
+#define LOGMSGADD(...)  do{Cl_putlogt(0, globlog, LOGLEVEL_MSG, __VA_ARGS__);}while(0)
+#define LOGDBG(...)     do{Cl_putlogt(1, globlog, LOGLEVEL_DBG, __VA_ARGS__);}while(0)
+#define LOGDBGADD(...)  do{Cl_putlogt(0, globlog, LOGLEVEL_DBG, __VA_ARGS__);}while(0)
+
 char *find_device();
+
+int str2long(char *str, long* l);
 
 #endif // AUX_H__

@@ -54,7 +54,6 @@ int main(int argc, char **argv){
         return parse_data_file(GP->checkfile, 0);
     }*/
     char *dev = find_device();
-    red("dev = %s\n", dev);
     if(!dev) ERRX("Serial device not found!");
     FREE(dev);
     signal(SIGTERM, signals); // kill (-15) - quit
@@ -69,7 +68,6 @@ int main(int argc, char **argv){
         while(v--){ // increase loglevel
             if(++lvl == LOGLEVEL_ANY) break;
         }
-        green("Log level: %d\n", lvl);
         OPENLOG(GP->logfile, lvl);
     }
     #ifndef EBUG
@@ -81,10 +79,10 @@ int main(int argc, char **argv){
     while(1){ // guard for dead processes
         pid_t childpid = fork();
         if(childpid){
-            LOGDBG("create child with PID %d", childpid);
+            LOGDBG("Create child with PID %d", childpid);
             DBG("Created child with PID %d\n", childpid);
             wait(NULL);
-            LOGDBG("child %d died", childpid);
+            LOGDBG("Child %d died", childpid);
             WARNX("Child %d died\n", childpid);
             sleep(1);
         }else{

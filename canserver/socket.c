@@ -18,6 +18,7 @@
 
 #include "aux.h"
 #include "cmdlnopts.h"   // glob_pars
+#include "proto.h"
 #include "socket.h"
 #include "term.h"
 
@@ -34,7 +35,8 @@
 #include <unistd.h>     // daemon
 #include <usefull_macros.h>
 
-#define BUFLEN    (10240)
+// buffer size for received data
+#define BUFLEN    (1024)
 // Max amount of connections
 #define BACKLOG   (30)
 
@@ -75,21 +77,21 @@ static int waittoread(int sock){
 }
 
 /**************** SERVER FUNCTIONS ****************/
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 /**
  * Send data over socket
  * @param sock      - socket fd
  * @param textbuf   - zero-trailing buffer with data to send
- * @return 1 if all OK
+ * @return amount of sent bytes
  */
-static int send_data(int sock, char *textbuf){
+static size_t send_data(int sock, char *textbuf){
     ssize_t Len = strlen(textbuf);
     if(Len != write(sock, textbuf, Len)){
         WARN("write()");
         LOGERR("send_data(): write() failed");
         return 0;
     }else LOGDBG("send_data(): sent '%s'", textbuf);
-    return 1;
+    return (size_t)Len;
 }
 
 #if 0
@@ -109,17 +111,11 @@ static char* stringscan(char *str, char *needle){
 #endif
 
 static void *handle_socket(void *asock){
-    //putlog("handle_socket(): getpid: %d, pthread_self: %lu, tid: %lu",getpid(), pthread_self(), syscall(SYS_gettid));
     FNAME();
     int sock = *((int*)asock);
     char buff[BUFLEN];
     ssize_t rd;
-    double t0 = dtime();
-    /*
-     * INSERT CODE HERE
-     * change to while(1) if socket shouldn't be closed after data transmission
-     */
-    while(dtime() - t0 < SOCKET_TIMEOUT){
+    while(1){
         if(!waittoread(sock)){ // no data incoming
             continue;
         }
@@ -138,28 +134,23 @@ static void *handle_socket(void *asock){
         buff[rd] = 0;
         // now we should check what do user want
         // here we can process user data
-        DBG("user send: %s", buff);
-        LOGDBG("user send %s", buff);
+        DBG("user send '%s'", buff);
+        LOGDBG("user send '%s'", buff);
         if(GP->echo){
             if(!send_data(sock, buff)){
-                LOGWARN("Can't send data to user, some error occured");
+                WARN("Can't send data to user, some error occured");
             }
         }
-        pthread_mutex_lock(&mutex);
-        /*
-         * INSERT CODE HERE
-         * Process user commands here & send him an answer
-         */
-        pthread_mutex_unlock(&mutex);
-        t0 = dtime();
+        //pthread_mutex_lock(&mutex);
+        char *ans = processCommand(buff); // run command parser
+        if(ans){
+            send_data(sock, ans);     // send answer
+            FREE(ans);
+        }
+        //pthread_mutex_unlock(&mutex);
     }
-    if(dtime() - t0 > SOCKET_TIMEOUT){
-        LOGDBG("Socket %d closed on timeout", sock);
-        DBG("Closed on timeout");
-    }else{
-        LOGDBG("Socket %d closed", sock);
-        DBG("Socket closed");
-    }
+    LOGDBG("Socket %d closed", sock);
+    DBG("Socket closed");
     close(sock);
     pthread_exit(NULL);
     return NULL;
@@ -201,16 +192,16 @@ static void *server(void *asock){
 // data gathering & socket management
 static void daemon_(int sock){
     if(sock < 0) return;
-    pthread_t sock_thread;
-    if(pthread_create(&sock_thread, NULL, server, (void*) &sock)){
-        LOGERR("daemon_(): pthread_create() failed");
-        ERR("pthread_create()");
-    }
     double tgot = 0.;
     char *devname = find_device();
     if(!devname){
         LOGERR("Can't find serial device");
         ERRX("Can't find serial device");
+    }
+    pthread_t sock_thread;
+    if(pthread_create(&sock_thread, NULL, server, (void*) &sock)){
+        LOGERR("daemon_(): pthread_create() failed");
+        ERR("pthread_create()");
     }
     do{
         if(pthread_kill(sock_thread, 0) == ESRCH){ // died
@@ -230,7 +221,7 @@ static void daemon_(int sock){
          * Gather data (poll_device)
          */
         // copy temporary buffers to main
-        pthread_mutex_lock(&mutex);
+        //pthread_mutex_lock(&mutex);
         int fd = open(devname, O_RDONLY);
         if(fd == -1){
             WARN("open()");
@@ -250,7 +241,7 @@ static void daemon_(int sock){
          * INSERT CODE HERE
          * fill global data buffers
          */
-        pthread_mutex_unlock(&mutex);
+        //pthread_mutex_unlock(&mutex);
     }while(1);
     LOGERR("daemon_(): UNREACHABLE CODE REACHED!");
 }
