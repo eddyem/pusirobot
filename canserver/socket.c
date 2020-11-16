@@ -18,20 +18,21 @@
 
 #include "aux.h"
 #include "cmdlnopts.h"   // glob_pars
+#include "processmotors.h"
 #include "proto.h"
 #include "socket.h"
 #include "term.h"
 
 #include <arpa/inet.h>  // inet_ntop
+#include <sys/ioctl.h>
 #include <limits.h>     // INT_xxx
 #include <netdb.h>      // addrinfo
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>     // pthread_kill
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>   // open
 #include <sys/syscall.h> // syscall
-#include <fcntl.h>      // open
 #include <unistd.h>     // daemon
 #include <usefull_macros.h>
 
@@ -40,41 +41,7 @@
 // Max amount of connections
 #define BACKLOG   (30)
 
-extern glob_pars *GP;
-
-/*
- * Define global data buffers here
- */
-
-/**************** COMMON FUNCTIONS ****************/
-/**
- * wait for answer from socket
- * @param sock - socket fd
- * @return 0 in case of error or timeout, 1 in case of socket ready
- */
-static int waittoread(int sock){
-    fd_set fds;
-    struct timeval timeout;
-    int rc;
-    timeout.tv_sec = 1; // wait not more than 1 second
-    timeout.tv_usec = 0;
-    FD_ZERO(&fds);
-    FD_SET(sock, &fds);
-    do{
-        rc = select(sock+1, &fds, NULL, NULL, &timeout);
-        if(rc < 0){
-            if(errno != EINTR){
-                WARN("select()");
-                LOGWARN("waittoread(): select() error");
-                return 0;
-            }
-            continue;
-        }
-        break;
-    }while(1);
-    if(FD_ISSET(sock, &fds)) return 1;
-    return 0;
-}
+message ServerMessages = {0};
 
 /**************** SERVER FUNCTIONS ****************/
 //pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -84,7 +51,7 @@ static int waittoread(int sock){
  * @param textbuf   - zero-trailing buffer with data to send
  * @return amount of sent bytes
  */
-static size_t send_data(int sock, char *textbuf){
+static size_t send_data(int sock, const char *textbuf){
     ssize_t Len = strlen(textbuf);
     if(Len != write(sock, textbuf, Len)){
         WARN("write()");
@@ -110,50 +77,35 @@ static char* stringscan(char *str, char *needle){
 }
 #endif
 
-static void *handle_socket(void *asock){
+/**
+ * @brief handle_socket - read and process data from socket
+ * @param sock - socket fd
+ * @return 0 if all OK, 1 if socket closed
+ */
+static int handle_socket(int sock){
     FNAME();
-    int sock = *((int*)asock);
     char buff[BUFLEN];
-    ssize_t rd;
-    while(1){
-        if(!waittoread(sock)){ // no data incoming
-            continue;
-        }
-        if(!(rd = read(sock, buff, BUFLEN-1))){
-            DBG("Client closed socket");
-            LOGDBG("Socket %d closed", sock);
-            break;
-        }
-        DBG("Got %zd bytes", rd);
-        if(rd < 0){ // error
-            LOGDBG("Close socket %d: read=%d", sock, rd);
-            DBG("Nothing to read from fd %d (ret: %zd)", sock, rd);
-            break;
-        }
-        // add trailing zero to be on the safe side
-        buff[rd] = 0;
-        // now we should check what do user want
-        // here we can process user data
-        DBG("user send '%s'", buff);
-        LOGDBG("user send '%s'", buff);
-        if(GP->echo){
-            if(!send_data(sock, buff)){
-                WARN("Can't send data to user, some error occured");
-            }
-        }
-        //pthread_mutex_lock(&mutex);
-        char *ans = processCommand(buff); // run command parser
-        if(ans){
-            send_data(sock, ans);     // send answer
-            FREE(ans);
-        }
-        //pthread_mutex_unlock(&mutex);
+    ssize_t rd = read(sock, buff, BUFLEN-1);
+    if(rd < 1){
+        DBG("read() == %zd", rd);
+        return 1;
     }
-    LOGDBG("Socket %d closed", sock);
-    DBG("Socket closed");
-    close(sock);
-    pthread_exit(NULL);
-    return NULL;
+    // add trailing zero to be on the safe side
+    buff[rd] = 0;
+    // now we should check what do user want
+    // here we can process user data
+    DBG("user %d send '%s'", sock, buff);
+    LOGDBG("user %d send '%s'", sock, buff);
+    if(GP->echo){
+        send_data(sock, buff);
+    }
+    //pthread_mutex_lock(&mutex);
+    const char *ans = processCommand(buff); // run command parser
+    if(ans){
+        send_data(sock, ans);   // send answer
+    }
+    //pthread_mutex_unlock(&mutex);
+    return 0;
 }
 
 // main socket server
@@ -165,25 +117,63 @@ static void *server(void *asock){
         WARN("listen");
         return NULL;
     }
+    int nfd = 1;
+    // max amount of opened fd (+1 for server socket)
+#define MAX_FDS (3)
+    struct pollfd poll_set[MAX_FDS];
+    memset(poll_set, 0, sizeof(poll_set));
+    poll_set[0].fd = sock;
+    poll_set[0].events = POLLIN;
     while(1){
-        socklen_t size = sizeof(struct sockaddr_in);
-        struct sockaddr_in their_addr;
-        int newsock;
-        if(!waittoread(sock)) continue;
-        newsock = accept(sock, (struct sockaddr*)&their_addr, &size);
-        if(newsock <= 0){
-            LOGERR("server(): accept() failed");
-            WARN("accept()");
-            continue;
-        }
-        pthread_t handler_thread;
-        if(pthread_create(&handler_thread, NULL, handle_socket, (void*) &newsock)){
-            LOGERR("server(): pthread_create() failed");
-            WARN("pthread_create()");
-        }else{
-            LOGDBG("server(): listen thread created");
-            DBG("Thread created, detouch");
-            pthread_detach(handler_thread); // don't care about thread state
+        poll(poll_set, nfd, 1); // poll for 1ms
+        for(int fdidx = 0; fdidx < nfd; ++fdidx){ // poll opened FDs
+            if((poll_set[fdidx].revents & POLLIN) == 0) continue;
+            poll_set[fdidx].revents = 0;
+            if(fdidx){ // client
+                int fd = poll_set[fdidx].fd;
+                //int nread = 0;
+                //ioctl(fd, FIONREAD, &nread);
+                if(handle_socket(fd)){ // socket closed - remove it from list
+                    close(fd);
+                    DBG("Client with fd %d closed", fd);
+                    LOGMSG("Client %d disconnected", fd);
+                    for(int i = fdidx; i < nfd; ++i)
+                        poll_set[i] = poll_set[i + 1];
+                    --nfd;
+                }
+            }else{ // server
+                socklen_t size = sizeof(struct sockaddr_in);
+                struct sockaddr_in their_addr;
+                int newsock = accept(sock, (struct sockaddr*)&their_addr, &size);
+                if(newsock <= 0){
+                    LOGERR("server(): accept() failed");
+                    WARN("accept()");
+                    continue;
+                }
+                struct in_addr ipAddr = their_addr.sin_addr;
+                char str[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &ipAddr, str, INET_ADDRSTRLEN);
+                DBG("Connection from %s, give fd=%d", str, newsock);
+                LOGMSG("Got connection from %s, fd=%d", str, newsock);
+                if(nfd == MAX_FDS){
+                    LOGWARN("Max amount of connections: disconnect %s (%d)", str, newsock);
+                    send_data(newsock, "Max amount of connections reached!\n");
+                    WARNX("Limit of connections reached");
+                    close(newsock);
+                }else{
+                    memset(&poll_set[nfd], 0, sizeof(struct pollfd));
+                    poll_set[nfd].fd = newsock;
+                    poll_set[nfd].events = POLLIN;
+                    ++nfd;
+                }
+            }
+        } // endfor
+        char *srvmesg = getmesg(idxMISO, &ServerMessages); // broadcast messages to all clients
+        if(srvmesg){ // send broadcast message to all clients or throw them to /dev/null
+            for(int fdidx = 1; fdidx < nfd; ++fdidx){
+                send_data(poll_set[fdidx].fd, srvmesg);
+            }
+            FREE(srvmesg);
         }
     }
     LOGERR("server(): UNREACHABLE CODE REACHED!");
@@ -192,14 +182,9 @@ static void *server(void *asock){
 // data gathering & socket management
 static void daemon_(int sock){
     if(sock < 0) return;
-    double tgot = 0.;
-    char *devname = find_device();
-    if(!devname){
-        LOGERR("Can't find serial device");
-        ERRX("Can't find serial device");
-    }
-    pthread_t sock_thread;
-    if(pthread_create(&sock_thread, NULL, server, (void*) &sock)){
+    pthread_t sock_thread, canserver_thread;
+    if(pthread_create(&sock_thread, NULL, server, (void*) &sock) ||
+       pthread_create(&canserver_thread, NULL, CANserver, NULL)){
         LOGERR("daemon_(): pthread_create() failed");
         ERR("pthread_create()");
     }
@@ -209,34 +194,22 @@ static void daemon_(int sock){
             LOGERR("Sockets thread died");
             pthread_join(sock_thread, NULL);
             if(pthread_create(&sock_thread, NULL, server, (void*) &sock)){
-                LOGERR("daemon_(): new pthread_create() failed");
-                ERR("pthread_create()");
+                LOGERR("daemon_(): new pthread_create(sock_thread) failed");
+                ERR("pthread_create(sock_thread)");
+            }
+        }
+        if(pthread_kill(canserver_thread, 0) == ESRCH){
+            WARNX("CANserver thread died");
+            LOGERR("CANserver thread died");
+            pthread_join(canserver_thread, NULL);
+            if(pthread_create(&canserver_thread, NULL, CANserver, NULL)){
+                LOGERR("daemon_(): new pthread_create(canserver_thread) failed");
+                ERR("pthread_create(canserver_thread)");
             }
         }
         usleep(1000); // sleep a little or thread's won't be able to lock mutex
-        if(dtime() - tgot < T_INTERVAL) continue;
-        tgot = dtime();
-        /*
-         * INSERT CODE HERE
-         * Gather data (poll_device)
-         */
         // copy temporary buffers to main
         //pthread_mutex_lock(&mutex);
-        int fd = open(devname, O_RDONLY);
-        if(fd == -1){
-            WARN("open()");
-            LOGWARN("Device %s is absent", devname);
-            FREE(devname);
-            double t0 = dtime();
-            while(dtime() - t0 < 5.){
-                if((devname = find_device())) break;
-                usleep(1000);
-            }
-            if(!devname){
-                LOGERR("Can't open serial device, kill myself");
-                ERRX("Can't open device, kill myself");
-            }else LOGMSG("Change device to %s", devname);
-        }else close(fd);
         /*
          * INSERT CODE HERE
          * fill global data buffers

@@ -57,6 +57,8 @@ myoption cmdlnopts[] = {
 // common options
     {"help",    NO_ARGS,    NULL,   'h',    arg_int,    APTR(&help),        _("show this help")},
     {"device",  NEED_ARG,   NULL,   'i',    arg_string, APTR(&G.device),    _("serial device name (default: none)")},
+    {"vid",     NEED_ARG,   NULL,   'V',    arg_string, APTR(&G.vid),       _("serial device vendor ID (default: none)")},
+    {"pid",     NEED_ARG,   NULL,   'P',    arg_string, APTR(&G.pid),       _("serial device product ID (default: none)")},
     {"port",    NEED_ARG,   NULL,   'p',    arg_string, APTR(&G.port),      _("network port to connect (default: " DEFAULT_PORT ")")},
     {"logfile", NEED_ARG,   NULL,   'l',    arg_string, APTR(&G.logfile),   _("save logs to file (default: none)")},
     {"echo",    NO_ARGS,    NULL,   'e',    arg_int,    APTR(&G.echo),      _("echo users commands back")},

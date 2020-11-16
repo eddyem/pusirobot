@@ -20,6 +20,12 @@
 #ifndef PROCESSMOTORS_H__
 #define PROCESSMOTORS_H__
 
+#include "threadlist.h"
 
+extern message CANbusMessages;
+extern thread_handler CANhandlers[];
+
+void *CANserver(void *data);
+thread_handler *get_handler(const char *name);
 
 #endif // PROCESSMOTORS_H__

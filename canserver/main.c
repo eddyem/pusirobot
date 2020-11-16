@@ -63,9 +63,9 @@ int main(int argc, char **argv){
     signal(SIGTSTP, SIG_IGN); // ignore ctrl+Z
 
     if(GP->logfile){
-        Cl_loglevel lvl = LOGLEVEL_ERR;
+        Cl_loglevel lvl = LOGLEVEL_ERR; // default log level - errors
         int v = GP->verb;
-        while(v--){ // increase loglevel
+        while(v--){ // increase loglevel for each "-v"
             if(++lvl == LOGLEVEL_ANY) break;
         }
         OPENLOG(GP->logfile, lvl);

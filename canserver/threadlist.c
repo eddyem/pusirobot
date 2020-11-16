@@ -61,8 +61,9 @@ static char *popmessage(msglist **lst){
     if(!lst || !*lst) return NULL;
     char *ret;
     msglist *node = *lst;
-    ret = (*lst)->data;
-    *lst = (*lst)->next;
+    if(node->next) node->next->last = node->last; // pop not last message
+    ret = node->data;
+    *lst = node->next;
     FREE(node);
     return ret;
 }
@@ -132,9 +133,13 @@ char *addmesg(msgidx idx, message *msg, char *txt){
     if(L < 1) return NULL;
     DBG("Want to add mesg '%s' with length %zd", txt, L);
     if(pthread_mutex_lock(&msg->mutex[idx])) return NULL;
-    if(!pushmessage(&msg->text[idx], txt)) return NULL;
+    msglist *node = pushmessage(&msg->text[idx], txt);
+    if(!node){
+        pthread_mutex_unlock(&msg->mutex[idx]);
+        return NULL;
+    }
     pthread_mutex_unlock(&msg->mutex[idx]);
-    return msg->text[idx]->data;
+    return node->data;
 }
 
 /**
@@ -198,11 +203,40 @@ threadinfo *registerThread(char *name, int ID, void *(*handler)(void *)){
 }
 
 /**
+ * @brief killThread - kill thread by its descriptor
+ * @param lptr - pointer to thread descriptor
+ * @param prev - pointer to previous thread in list or NULL (to found it here)
+ * @return 0 if all OK
+ */
+int killThread(threadlist *lptr, threadlist *prev){
+    if(!lptr) return 1;
+    if(!prev){
+        threadlist *t = thelist;
+        for(; t; t = t->next){
+            if(t == lptr) break;
+            prev = lptr;
+        }
+    }
+    DBG("Delete '%s', prev: '%s'", lptr->ti.name, prev->ti.name);
+    threadlist *next = lptr->next;
+    if(lptr == thelist) thelist = next;
+    else if(prev) prev->next = next;
+    for(int i = 0; i < 2; ++i){
+        pthread_mutex_lock(&lptr->ti.mesg.mutex[i]);
+        char *txt;
+        while((txt = popmessage(&lptr->ti.mesg.text[i]))) FREE(txt);
+        pthread_mutex_destroy(&lptr->ti.mesg.mutex[i]);
+    }
+    if(pthread_cancel(lptr->ti.thread)) WARN("Can't kill thread '%s'", lptr->ti.name);
+    FREE(lptr);
+    return 0;
+}
+/**
  * @brief killThread - kill and unregister thread with given name
  * @param name - thread's name
  * @return 0 if all OK
  */
-int killThread(const char *name){
+int killThreadByName(const char *name){
     if(!name || !thelist) return 1;
     threadlist *lptr = thelist, *prev = NULL;
     for(; lptr; lptr = lptr->next){
@@ -210,19 +244,7 @@ int killThread(const char *name){
             prev = lptr;
             continue;
         }
-        DBG("Found '%s', prev: '%s', delete", name, prev->ti.name);
-        threadlist *next = lptr->next;
-        if(lptr == thelist) thelist = next;
-        else if(prev) prev->next = next;
-        for(int i = 0; i < 2; ++i){
-            pthread_mutex_lock(&lptr->ti.mesg.mutex[i]);
-            char *txt;
-            while((txt = popmessage(&lptr->ti.mesg.text[i]))) FREE(txt);
-            pthread_mutex_destroy(&lptr->ti.mesg.mutex[i]);
-        }
-        if(pthread_cancel(lptr->ti.thread)) WARN("Can't kill thread '%s'", name);
-        FREE(lptr);
-        return 0;
+        return killThread(lptr, prev);
     }
     return 2; // not found
 }

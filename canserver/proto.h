@@ -20,6 +20,6 @@
 #ifndef PROTO_H__
 #define PROTO_H__
 
-char *processCommand(char *cmd);
+const char *processCommand(char *cmd);
 
 #endif // PROTO_H__

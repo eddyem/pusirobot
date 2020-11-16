@@ -31,6 +31,7 @@ typedef struct msglist_{
     struct msglist_ *next, *last;   // other elements of list
 } msglist;
 
+// for all threads MASTER is the thread itself, slaves are all others
 typedef enum{
     idxMOSI = 0,    // master out, slave in
     idxMISO = 1,    // master in, slave out
@@ -58,10 +59,16 @@ typedef struct thread_list_{
     struct thread_list_ *next;      // next element
 } threadlist;
 
+// name - handler pair for threads registering functions
+typedef struct{
+    const char *name;               // handler name
+    void *(*handler)(void *);       // handler function
+} thread_handler;
+
 threadinfo *findThreadByName(char *name);
 threadinfo *findThreadByID(int ID);
 threadinfo *registerThread(char *name, int ID, void *(*handler)(void *));
-int killThread(const char *name);
+int killThreadByName(const char *name);
 char *getmesg(msgidx idx, message *msg);
 char *addmesg(msgidx idx, message *msg, char *txt);
 

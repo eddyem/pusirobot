@@ -20,11 +20,9 @@
 #ifndef __SOCKET_H__
 #define __SOCKET_H__
 
-// timeout for socket closing
-#define SOCKET_TIMEOUT  (5.0)
-// time interval for data polling (seconds)
-#define T_INTERVAL      (10.)
+#include "threadlist.h"
 
+extern message ServerMessages;
 void daemonize(char *port);
 
 #endif // __SOCKET_H__
