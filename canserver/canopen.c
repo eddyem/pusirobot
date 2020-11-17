@@ -110,12 +110,6 @@ static CANmesg *mkMesg(SDO *sdo){
     mesg.data[1] = sdo->index & 0xff; // l
     mesg.data[2] = (sdo->index >> 8) & 0xff; // h
     mesg.data[3] = sdo->subindex;
-#if 0
-    FNAME();
-    green("Make message to 0x%X: ", mesg.ID);
-    for(uint8_t i = 0; i < 8; ++i) printf("0x%02X ", mesg.data[i]);
-    printf("\n");
-#endif
     return &mesg;
 }
 

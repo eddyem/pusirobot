@@ -22,7 +22,7 @@
 #include <stdint.h>
 
 #ifndef T_POLLING_TMOUT
-#define T_POLLING_TMOUT (0.5)
+#define T_POLLING_TMOUT (0.01)
 #endif
 
 typedef struct{
@@ -44,5 +44,6 @@ void canbus_clear();
 void setserialspeed(int speed);
 void showM(CANmesg *m);
 CANmesg *parseCANmesg(const char *str);
+int canbus_disconnected();
 
 #endif // CANBUS_H__

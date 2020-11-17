@@ -22,6 +22,7 @@
 #include <sys/select.h>
 #include <usefull_macros.h>
 
+#include "aux.h"
 #include "canbus.h"
 
 #ifndef BUFLEN
@@ -43,6 +44,7 @@ This file should provide next functions:
 
 static TTY_descr *dev = NULL;  // shoul be global to restore if die
 static int serialspeed = 115200; // speed to open serial device
+static int disconnected = 1; // ==1 if disconnected
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static char *read_string();
@@ -55,6 +57,7 @@ static char *read_string();
  */
 static int read_ttyX(TTY_descr *d){
     if(!d || d->comfd < 0) return -1;
+    if(disconnected) return -1;
     size_t L = 0;
     ssize_t l;
     size_t length = d->bufsz;
@@ -71,6 +74,8 @@ static int read_ttyX(TTY_descr *d){
         if (!retval) break;
         if(FD_ISSET(d->comfd, &rfds)){
             if((l = read(d->comfd, ptr, length)) < 1){
+                WARN("TTY disconnected");
+                disconnected = 1;
                 return -1; // disconnect or other error - close TTY & die
             }
             ptr += l; L += l;
@@ -86,21 +91,18 @@ static int read_ttyX(TTY_descr *d){
 // thread-safe writing, add trailing '\n'
 static int ttyWR(const char *buff, int len){
     FNAME();
+    if(disconnected) return 1;
     pthread_mutex_lock(&mutex);
     //canbus_clear();
     read_string(); // clear RX buffer
-    DBG("Write 2tty %d bytes: ", len);
-#ifdef EBUG
-    int _U_ n = write(STDERR_FILENO, buff, len);
-    fprintf(stderr, "\n");
-    double t0 = dtime();
-#endif
     int w = write_tty(dev->comfd, buff, (size_t)len);
     if(!w) w = write_tty(dev->comfd, "\n", 1);
-    DBG("Written, dt=%g", dtime() - t0);
     int errctr = 0;
     while(1){
         char *s = read_string(); // clear echo & check
+        if(disconnected){
+            w = 1; break;
+        }
         if(!s || strncmp(s, buff, strlen(buff)) != 0){
             if(++errctr > 3){
                 WARNX("wrong answer! Got '%s' instead of '%s'", s, buff);
@@ -110,12 +112,12 @@ static int ttyWR(const char *buff, int len){
         }else break;
     }
     pthread_mutex_unlock(&mutex);
-    DBG("Success, dt=%g", dtime() - t0);
     return w;
 }
 
 void canbus_close(){
     if(dev) close_tty(&dev);
+    disconnected = 1;
 }
 
 void setserialspeed(int speed){
@@ -123,7 +125,7 @@ void setserialspeed(int speed){
 }
 
 void canbus_clear(){
-    while(read_ttyX(dev));
+    while(read_ttyX(dev) > 0);
 }
 
 int canbus_open(const char *devname){
@@ -131,6 +133,7 @@ int canbus_open(const char *devname){
         WARNX("canbus_open(): need device name");
         return 1;
     }
+    disconnected = 1;
     if(dev) close_tty(&dev);
     dev = new_tty((char*)devname, serialspeed, BUFLEN);
     if(dev){
@@ -140,10 +143,12 @@ int canbus_open(const char *devname){
     if(!dev){
         return 1;
     }
+    disconnected = 0;
     return 0;
 }
 
 int canbus_setspeed(int speed){
+    if(disconnected) return 1;
     if(speed == 0) return 0; // default - not change
     char buff[BUFLEN];
     if(speed < 10 || speed > 3000){
@@ -153,12 +158,18 @@ int canbus_setspeed(int speed){
     int len = snprintf(buff, BUFLEN, "b %d", speed);
     if(len < 1) return 2;
     int r = ttyWR(buff, len);
-    read_string(); // clear RX buf ('Reinit CAN bus with speed XXXXkbps')
+    canbus_clear();
     return r;
 }
 
+/**
+ * @brief canbus_write - write message to CAN bus
+ * @param mesg - raw message
+ * @return 0 if all OK
+ */
 int canbus_write(CANmesg *mesg){
     FNAME();
+    if(disconnected) return 1;
     char buf[BUFLEN];
     if(!mesg || mesg->len > 8) return 1;
     int rem = BUFLEN, len = 0;
@@ -178,6 +189,7 @@ int canbus_write(CANmesg *mesg){
  * @return NULL if nothing was read or pointer to static buffer
  */
 static char *read_string(){
+    if(disconnected) return NULL;
     static char buf[1024];
     int LL = 1023, r = 0, l;
     char *ptr = NULL;
@@ -196,7 +208,9 @@ static char *read_string(){
     do{
         if((l = read_ttyX(dev))){
             if(l < 0){
-                ERR("tty disconnected");
+                LOGERR("Tty disconnected");
+                disconnected = 1;
+                return NULL;
             }
             if(l > LL){ // buffer overflow
                 WARNX("read_string(): buffer overflow");
@@ -206,7 +220,6 @@ static char *read_string(){
             memcpy(ptr, dev->buf, dev->buflen);
             r += l; LL -= l; ptr += l;
             if(ptr[-1] == '\n'){
-                //DBG("Newline detected");
                 break;
             }
             d0 = dtime();
@@ -220,16 +233,20 @@ static char *read_string(){
             ++optr;
         }else{
             WARNX("read_string(): no newline found");
-            DBG("buf: %s", buf);
             optr = NULL;
             return NULL;
         }
-        DBG("buf: %s, time: %g", buf, dtime() - d0);
         return buf;
     }
     return NULL;
 }
 
+/**
+ * @brief parseCANmesg - message parser
+ * @param str - string from terminal: time #ID [data]
+ * @return NULL if error or pointer to static structure
+ * Not thread safe!!!
+ */
 CANmesg *parseCANmesg(const char *str){
     static CANmesg m;
     int l = sscanf(str, "%d #0x%hx 0x%hhx 0x%hhx 0x%hhx 0x%hhx 0x%hhx 0x%hhx 0x%hhx 0x%hhx", &m.timemark, &m.ID,
@@ -239,40 +256,32 @@ CANmesg *parseCANmesg(const char *str){
     return &m;
 }
 
-#ifdef EBUG
-void showM(CANmesg *m){
-    printf("TS=%d, ID=0x%X", m->timemark, m->ID);
-    int l = m->len;
-    if(l) printf(", data=");
-    for(int i = 0; i < l; ++i) printf(" 0x%02X", m->data[i]);
-    printf("\n");
-}
-#endif
-
+/**
+ * @brief canbus_read - read any message from CAN bus
+ * @param mesg - pointer to message
+ * @return 0 if all OK
+ */
 int canbus_read(CANmesg *mesg){
     if(!mesg) return 1;
+    if(disconnected) return 1;
     pthread_mutex_lock(&mutex);
-    double t0 = dtime();
-    int ID = mesg->ID;
     char *ans;
     CANmesg *m;
+    double t0 = dtime();
     while(dtime() - t0 < T_POLLING_TMOUT){ // read answer
         if((ans = read_string())){ // parse new data
             if((m = parseCANmesg(ans))){
-                DBG("Got canbus message (dT=%g):", dtime() - t0);
-#ifdef EBUG
-                showM(m);
-#endif
-                if(ID && m->ID == ID){
-                    memcpy(mesg, m, sizeof(CANmesg));
-                    DBG("All OK");
-                    pthread_mutex_unlock(&mutex);
-                    return 0;
-                }
+                memcpy(mesg, m, sizeof(CANmesg));
+                pthread_mutex_unlock(&mutex);
+                return 0;
             }
         }
+        if(disconnected) break;
     }
     pthread_mutex_unlock(&mutex);
     return 1;
 }
 
+int canbus_disconnected(){
+    return disconnected;
+}

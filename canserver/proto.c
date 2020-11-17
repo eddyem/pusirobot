@@ -20,6 +20,7 @@
 #include "cmdlnopts.h"
 #include "processmotors.h"
 #include "proto.h"
+#include "socket.h"
 #include "threadlist.h"
 
 #include <stdio.h>
@@ -27,15 +28,16 @@
 #include <usefull_macros.h>
 
 // standard answers of processCommand
-static const char *ANS_OK = "OK\n";
-static const char *ANS_WRONGCANID = "Wrong CANID\n";
-static const char *ANS_NOTFOUND = "Thread not found\n";
-static const char *ANS_CANTSEND = "Can't send message\n";
+static const char *ANS_OK = "OK";
+static const char *ANS_WRONGCANID = "Wrong CANID";
+static const char *ANS_NOTFOUND = "Thread not found";
+static const char *ANS_CANTSEND = "Can't send message";
 
-static const char *sendraw(char *id, char *data);
+static const char *listthr(_U_ char *par1, _U_ char *par2);
 static const char *regthr(char *thrname, char *data);
 static const char *unregthr(char *thrname, char *data);
 static const char *sendmsg(char *thrname, char *data);
+static const char *setspd(char *speed, _U_ char *data);
 
 /*
  * Commands format:
@@ -53,39 +55,29 @@ typedef struct{
 
 // array with known functions
 static cmditem functions[] = {
-    {"raw", sendraw},
-    {"register", regthr},
-    {"unregister", unregthr},
-    {"mesg", sendmsg},
+    {"list", listthr},          // list threads
+    {"mesg", sendmsg},          // "mesg NAME ID [data]"
+    {"register", regthr},       // "register NAME ID", ID - RAW CAN ID (not canopen ID)!!!
+    {"speed", setspd},          // set CANbus speed
+    {"unregister", unregthr},   // "unregister NAME"
     {NULL, NULL}
 };
 
-/**
- * @brief sendraw - send raw data to CANbus
- * @param id    - CANid (in string format)
- * @param data  - data to send (delimeters are: space, tab, comma or semicolon)
- *          WARNING! parameter `data` will be broken after this function
- *              id & data can be decimal, hexadecimal or octal
- * @return answer to client
- */
-static const char *sendraw(char *id, char *data){
-    char buf[128], *s, *saveptr;
-    if(!id) return "Need CAN ID\n";
-    long ID, info[9]={0};
-    int i;
-    if(str2long(id, &ID)){
-        return ANS_WRONGCANID;
-    }
-    for(s = data, i = 0; i < 9; s = NULL, ++i){
-        char *nxt = strtok_r(s, " \t,;\r\n", &saveptr);
-        if(!nxt) break;
-        if(str2long(nxt, &info[i])) break;
-    }
-    if(i > 8) return "Not more than 8 data bytes\n";
-    snprintf(buf, 128, "ID=%ld, datalen=%d, data={%ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld}\n",
-             ID, i, info[0], info[1], info[2], info[3], info[4], info[5], info[6], info[7]);
-    addmesg(idxMISO, &CANbusMessages, buf);
-    return ANS_OK;
+// list all threads
+static const char *listthr(_U_ char *par1, _U_ char *par2){
+    FNAME();
+    char msg[256];
+    threadlist *list = NULL;
+    int empty = 1;
+    do{
+        list = nextThread(list);
+        if(!list) break;
+        snprintf(msg, 256, "thread name='%s' role='%s' ID=0x%X", list->ti.name, list->ti.handler.name, list->ti.ID);
+        addmesg(&ServerMessages, msg);
+        empty = 0;
+    }while(1);
+    if(empty) return "No threads";
+    return NULL;
 }
 
 // register new thread
@@ -96,13 +88,14 @@ static const char *sendraw(char *id, char *data){
  * @return answer to client
  */
 static const char *regthr(char *thrname, char *data){
+    FNAME();
     threadinfo *ti = findThreadByName(thrname);
-    if(ti) return "Thread exists\n";
+    if(ti) return "Thread exists";
     char *saveptr;
     char *id = strtok_r(data, " \t,;\r\n", &saveptr);
     if(!id) return ANS_WRONGCANID;
     char *role = strtok_r(NULL, " \t,;\r\n", &saveptr);
-    if(!role) return "No thread role\n";
+    if(!role) return "No thread role";
     DBG("Data='%s'; id='%s', role='%s'", data, id, role);
     long ID;
     if(str2long(data, &ID)){
@@ -110,10 +103,10 @@ static const char *regthr(char *thrname, char *data){
     }
     DBG("Check ID");
     ti = findThreadByID(ID);
-    if(ti) return "Thread with given ID exists\n";
+    if(ti) return "Thread with given ID exists";
     thread_handler *h = get_handler(role);
-    if(!h) return "Unknown role\n";
-    if(!registerThread(thrname, ID, h->handler)) return "Can't register\n";
+    if(!h) return "Unknown role";
+    if(!registerThread(thrname, ID, h)) return "Can't register";
     return ANS_OK;
 }
 
@@ -124,6 +117,7 @@ static const char *regthr(char *thrname, char *data){
  * @return answer
  */
 static const char *unregthr(char *thrname, _U_ char *data){
+    FNAME();
     if(killThreadByName(thrname)) return ANS_NOTFOUND;
     return ANS_OK;
 }
@@ -135,9 +129,20 @@ static const char *unregthr(char *thrname, _U_ char *data){
  * @return answer
  */
 static const char *sendmsg(char *thrname, char *data){
+    FNAME();
     threadinfo *ti = findThreadByName(thrname);
     if(!ti) return ANS_NOTFOUND;
-    if(!addmesg(idxMISO, &ti->mesg, data)) return ANS_CANTSEND;
+    if(!addmesg(&ti->commands, data)) return ANS_CANTSEND;
+    return ANS_OK;
+}
+
+static const char *setspd(char *speed, _U_ char *data){
+    FNAME();
+    long spd;
+    if(str2long(speed, &spd) || spd < 1 || spd > 1000 || setCANspeed((int)spd)){
+        DBG("Wrong speed: %s", speed);
+        return "Wrong speed";
+    }
     return ANS_OK;
 }
 
@@ -163,12 +168,6 @@ const char *processCommand(char *cmd){
     for(cmditem *item = functions; item->fname; ++item){
         if(0 == strcasecmp(item->fname, fname)) return item->handler(procname, data);
     }
-    return "Wrong command\n";
+    return "Wrong command";
 }
 
-#if 0
-static char buf[1024];
-snprintf(buf, 1024, "FUNC=%s, PROC=%s, CMD=%s\n", fname, procname, data);
-DBG("buf: %s", buf);
-return buf;
-#endif

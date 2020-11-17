@@ -27,5 +27,6 @@ extern thread_handler CANhandlers[];
 
 void *CANserver(void *data);
 thread_handler *get_handler(const char *name);
+int setCANspeed(int speed);
 
 #endif // PROCESSMOTORS_H__

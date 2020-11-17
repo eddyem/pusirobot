@@ -46,7 +46,7 @@ message ServerMessages = {0};
 /**************** SERVER FUNCTIONS ****************/
 //pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 /**
- * Send data over socket
+ * Send data over socket (and add trailing '\n' if absent)
  * @param sock      - socket fd
  * @param textbuf   - zero-trailing buffer with data to send
  * @return amount of sent bytes
@@ -58,24 +58,9 @@ static size_t send_data(int sock, const char *textbuf){
         LOGERR("send_data(): write() failed");
         return 0;
     }else LOGDBG("send_data(): sent '%s'", textbuf);
+    if(textbuf[Len-1] != '\n') Len += write(sock, "\n", 1);
     return (size_t)Len;
 }
-
-#if 0
-// search a first word after needle without spaces
-static char* stringscan(char *str, char *needle){
-    char *a;//, *e;
-    char *end = str + strlen(str);
-    a = strstr(str, needle);
-    if(!a) return NULL;
-    a += strlen(needle);
-    while (a < end && (*a == ' ' || *a == '\r' || *a == '\t' || *a == '\r')) a++;
-    if(a >= end) return NULL;
-//    e = strchr(a, ' ');
-//    if(e) *e = 0;
-    return a;
-}
-#endif
 
 /**
  * @brief handle_socket - read and process data from socket
@@ -168,7 +153,7 @@ static void *server(void *asock){
                 }
             }
         } // endfor
-        char *srvmesg = getmesg(idxMISO, &ServerMessages); // broadcast messages to all clients
+        char *srvmesg = getmesg(&ServerMessages); // broadcast messages to all clients
         if(srvmesg){ // send broadcast message to all clients or throw them to /dev/null
             for(int fdidx = 1; fdidx < nfd; ++fdidx){
                 send_data(poll_set[fdidx].fd, srvmesg);

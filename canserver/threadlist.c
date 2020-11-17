@@ -106,10 +106,8 @@ threadinfo *findThreadByName(char *name){
  */
 threadinfo *findThreadByID(int ID){
     if(!thelist) return NULL; // thread list is empty
-    DBG("Try to find thread with ID=%d", ID);
     threadlist *lptr = thelist;
     while(lptr){
-        DBG("Check %d", lptr->ti.ID);
         if(ID == lptr->ti.ID) return &lptr->ti;
         lptr = lptr->next;
     }
@@ -118,46 +116,36 @@ threadinfo *findThreadByID(int ID){
 
 /**
  * @brief addmesg - add message to thread's queue
- * @param idx - index (MOSI/MISO)
  * @param msg - message itself
  * @param txt - data to add
  * @return data added or NULL if failed
  */
-char *addmesg(msgidx idx, message *msg, char *txt){
-    if(idx < 0 || idx >= idxNUM){
-        WARNX("Wrong message index");
-        return NULL;
-    }
+char *addmesg(message *msg, char *txt){
     if(!msg) return NULL;
     size_t L = strlen(txt);
     if(L < 1) return NULL;
     DBG("Want to add mesg '%s' with length %zd", txt, L);
-    if(pthread_mutex_lock(&msg->mutex[idx])) return NULL;
-    msglist *node = pushmessage(&msg->text[idx], txt);
+    if(pthread_mutex_lock(&msg->mutex)) return NULL;
+    msglist *node = pushmessage(&msg->text, txt);
     if(!node){
-        pthread_mutex_unlock(&msg->mutex[idx]);
+        pthread_mutex_unlock(&msg->mutex);
         return NULL;
     }
-    pthread_mutex_unlock(&msg->mutex[idx]);
+    pthread_mutex_unlock(&msg->mutex);
     return node->data;
 }
 
 /**
  * @brief getmesg - get first message from queue (allocates data, should be free'd after usage!)
- * @param idx - index (MOSI/MISO)
  * @param msg - message itself
  * @return data or NULL if empty
  */
-char *getmesg(msgidx idx, message *msg){
-    if(idx < 0 || idx >= idxNUM){
-        WARNX("Wrong message index");
-        return NULL;
-    }
+char *getmesg(message *msg){
     if(!msg) return NULL;
     char *text = NULL;
-    if(pthread_mutex_lock(&msg->mutex[idx])) return NULL;
-    text = popmessage(&msg->text[idx]);
-    pthread_mutex_unlock(&msg->mutex[idx]);
+    if(pthread_mutex_lock(&msg->mutex)) return NULL;
+    text = popmessage(&msg->text);
+    pthread_mutex_unlock(&msg->mutex);
     return text;
 }
 
@@ -168,7 +156,7 @@ char *getmesg(msgidx idx, message *msg){
  * @param handler - thread handler
  * @return pointer to new threadinfo struct or NULL if failed
  */
-threadinfo *registerThread(char *name, int ID, void *(*handler)(void *)){
+threadinfo *registerThread(char *name, int ID, thread_handler *handler){
     if(!name || strlen(name) < 1 || !handler) return NULL;
     threadinfo *ti = findThreadByName(name);
     DBG("Register new thread with name '%s' and ID=%d", name, ID);
@@ -189,13 +177,14 @@ threadinfo *registerThread(char *name, int ID, void *(*handler)(void *)){
         last->next = MALLOC(threadlist, 1);
         ti = &last->next->ti;
     }
-    ti->handler = handler;
+    memcpy(&ti->handler, handler, sizeof(thread_handler));
     snprintf(ti->name, THREADNAMEMAXLEN+1, "%s", name);
     ti->ID = ID;
-    memset(&ti->mesg, 0, sizeof(ti->mesg));
-    for(int i = 0; i < 2; ++i)
-        pthread_mutex_init(&ti->mesg.mutex[i], NULL);
-    if(pthread_create(&ti->thread, NULL, handler, (void*)ti)){
+    memset(&ti->commands, 0, sizeof(ti->commands));
+    pthread_mutex_init(&ti->commands.mutex, NULL);
+    memset(&ti->answers, 0, sizeof(ti->answers));
+    pthread_mutex_init(&ti->answers.mutex, NULL);
+    if(pthread_create(&ti->thread, NULL, handler->handler, (void*)ti)){
         WARN("pthread_create()");
         return NULL;
     }
@@ -221,16 +210,18 @@ int killThread(threadlist *lptr, threadlist *prev){
     threadlist *next = lptr->next;
     if(lptr == thelist) thelist = next;
     else if(prev) prev->next = next;
-    for(int i = 0; i < 2; ++i){
-        pthread_mutex_lock(&lptr->ti.mesg.mutex[i]);
-        char *txt;
-        while((txt = popmessage(&lptr->ti.mesg.text[i]))) FREE(txt);
-        pthread_mutex_destroy(&lptr->ti.mesg.mutex[i]);
-    }
+    char *txt;
+    pthread_mutex_lock(&lptr->ti.commands.mutex);
+    while((txt = popmessage(&lptr->ti.commands.text))) FREE(txt);
+    pthread_mutex_destroy(&lptr->ti.commands.mutex);
+    pthread_mutex_lock(&lptr->ti.answers.mutex);
+    while((txt = popmessage(&lptr->ti.answers.text))) FREE(txt);
+    pthread_mutex_destroy(&lptr->ti.answers.mutex);
     if(pthread_cancel(lptr->ti.thread)) WARN("Can't kill thread '%s'", lptr->ti.name);
     FREE(lptr);
     return 0;
 }
+
 /**
  * @brief killThread - kill and unregister thread with given name
  * @param name - thread's name
@@ -249,98 +240,14 @@ int killThreadByName(const char *name){
     return 2; // not found
 }
 
-#if 0
-static void *handler(void *data){
-    threadinfo *ti = (threadinfo*)data;
-    while(1){
-        char *got = getmesg(idxMOSI, &ti->mesg);
-        if(got){
-            green("%s got: %s\n", ti->name, got);
-            FREE(got);
-            addmesg(idxMISO, &ti->mesg, "received");
-            addmesg(idxMISO, &ti->mesg, "need more");
-        }
-        usleep(100);
-    }
-    return NULL;
+/**
+ * @brief nextThread - get next thread in `thelist`
+ * @param curr - pointer to previous thread or NULL for `thelist`
+ * @return pointer to next thread in list (or NULL if absent)
+ */
+threadlist *nextThread(threadlist *curr){
+    if(!curr) return thelist;
+    return curr->next;
 }
 
-static void dividemessages(message *msg, char *longtext){
-    char *copy = strdup(longtext), *saveptr = NULL;
-    for(char *s = copy; ; s = NULL){
-        char *nxt = strtok_r(s, " ", &saveptr);
-        if(!nxt) break;
-        addmesg(idxMOSI, msg, nxt);
-    }
-    FREE(copy);
-}
-
-static void procmesg(char *text){
-    if(!text) return;
-    char *nxt = strchr(text, ' ');
-    if(!nxt){
-        WARNX("Usage: cmd data, where cmd:\n"
-              "\tnew threadname - create thread\n"
-              "\tdel threadname - delete thread\n"
-              "\tsend threadname data - send data to thread\n"
-              "\tsend all data - send data to all\n");
-        return;
-    }
-    *nxt++ = 0;
-    if(strcasecmp(text, "new") == 0){
-        registerThread(nxt, handler);
-    }else if(strcasecmp(text, "del") == 0){
-        if(killThread(nxt)) WARNX("Can't delete '%s'", nxt);
-    }else if(strcasecmp(text, "send") == 0){
-        text = strchr(nxt, ' ');
-        if(!text){
-            WARNX("send all/threadname data");
-            return;
-        }
-        *text++ = 0;
-        if(strcasecmp(nxt, "all") == 0){ // bcast
-            threadlist *lptr = thelist;
-            while(lptr){
-                threadinfo *ti = &lptr->ti;
-                lptr = lptr->next;
-                green("Bcast send '%s' to thread '%s'\n", text, ti->name);
-                dividemessages(&ti->mesg, text);
-            }
-        }else{ // single
-            threadinfo *ti = findthread(nxt);
-            if(!ti){
-                WARNX("Thread '%s' not found", nxt);
-                return;
-            }
-            green("Send '%s' to thread '%s'\n", text, nxt);
-            dividemessages(&ti->mesg, text);
-        }
-    }
-}
-
-int main(){
-    using_history();
-    while(1){
-        threadlist *lptr = thelist;
-        while(lptr){
-            threadinfo *ti = &lptr->ti;
-            lptr = lptr->next;
-            char *got;
-            while((got = getmesg(idxMISO, &ti->mesg))){
-                red("got from '%s': %s\n", ti->name, got);
-                fflush(stdout);
-                FREE(got);
-            }
-        }
-        char *text = readline("mesg > ");
-        if(!text) break; // ^D
-        if(strlen(text) < 1) continue;
-        add_history(text);
-        procmesg(text);
-        FREE(text);
-    }
-    return 0;
-}
-
-#endif
 

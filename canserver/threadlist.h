@@ -31,26 +31,26 @@ typedef struct msglist_{
     struct msglist_ *next, *last;   // other elements of list
 } msglist;
 
-// for all threads MASTER is the thread itself, slaves are all others
-typedef enum{
-    idxMOSI = 0,    // master out, slave in
-    idxMISO = 1,    // master in, slave out
-    idxNUM  = 2     // amount of indexes
-} msgidx;
-
 // interthread messages; index 0 - MOSI, index 1 - MISO
 typedef struct{
-    msglist *text[idxNUM];          // stringified text messages
-    pthread_mutex_t mutex[idxNUM];  // text changing mutex
+    msglist *text;          // stringified text messages
+    pthread_mutex_t mutex;  // text changing mutex
 } message;
+
+// name - handler pair for threads registering functions
+typedef struct{
+    const char *name;               // handler name
+    void *(*handler)(void *);       // handler function
+} thread_handler;
 
 // thread information
 typedef struct{
     char name[THREADNAMEMAXLEN+1];  // thread name
     int ID;                         // numeric ID (canopen ID)
-    message mesg;                   // inter-thread messages
+    message commands;               // commands from clients
+    message answers;                // answers from CANserver (raw messages to given ID)
     pthread_t thread;               // thread descriptor
-    void *(*handler)(void *);       // handler function
+    thread_handler handler;         // handler name & function
 } threadinfo;
 
 // list of threads member
@@ -59,17 +59,12 @@ typedef struct thread_list_{
     struct thread_list_ *next;      // next element
 } threadlist;
 
-// name - handler pair for threads registering functions
-typedef struct{
-    const char *name;               // handler name
-    void *(*handler)(void *);       // handler function
-} thread_handler;
-
 threadinfo *findThreadByName(char *name);
 threadinfo *findThreadByID(int ID);
-threadinfo *registerThread(char *name, int ID, void *(*handler)(void *));
+threadinfo *registerThread(char *name, int ID, thread_handler *handler);
+threadlist *nextThread(threadlist *curr);
 int killThreadByName(const char *name);
-char *getmesg(msgidx idx, message *msg);
-char *addmesg(msgidx idx, message *msg, char *txt);
+char *getmesg(message *msg);
+char *addmesg(message *msg, char *txt);
 
 #endif // THREADLIST_H__
