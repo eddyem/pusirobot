@@ -20,9 +20,9 @@
 #ifndef PROCESSMOTORS_H__
 #define PROCESSMOTORS_H__
 
+#include "canbus.h"
 #include "threadlist.h"
 
-extern message CANbusMessages;
 extern thread_handler CANhandlers[];
 
 void *CANserver(void *data);

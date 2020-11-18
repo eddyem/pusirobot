@@ -73,7 +73,7 @@ static const char *listthr(_U_ char *par1, _U_ char *par2){
         list = nextThread(list);
         if(!list) break;
         snprintf(msg, 256, "thread name='%s' role='%s' ID=0x%X", list->ti.name, list->ti.handler.name, list->ti.ID);
-        addmesg(&ServerMessages, msg);
+        mesgAddText(&ServerMessages, msg);
         empty = 0;
     }while(1);
     if(empty) return "No threads";
@@ -132,7 +132,7 @@ static const char *sendmsg(char *thrname, char *data){
     FNAME();
     threadinfo *ti = findThreadByName(thrname);
     if(!ti) return ANS_NOTFOUND;
-    if(!addmesg(&ti->commands, data)) return ANS_CANTSEND;
+    if(!mesgAddText(&ti->commands, data)) return ANS_CANTSEND;
     return ANS_OK;
 }
 

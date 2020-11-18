@@ -78,8 +78,8 @@ typedef struct{
 } SDO;
 
 const char *abortcode_text(uint32_t abortcode);
-SDO *parseSDO(CANmesg *mesg);
-SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID);
+SDO *parseSDO(CANmesg *mesg, SDO *sdo);
+SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID, SDO *sdo);
 
 int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID);
 

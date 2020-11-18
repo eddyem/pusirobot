@@ -27,13 +27,14 @@
 
 // messages FIFO
 typedef struct msglist_{
-    char *data;                     // message itself
+    void *data;                     // message itself
+    size_t size;                    // message length in bytes
     struct msglist_ *next, *last;   // other elements of list
 } msglist;
 
 // interthread messages; index 0 - MOSI, index 1 - MISO
 typedef struct{
-    msglist *text;          // stringified text messages
+    msglist *msg;          // stringified text messages
     pthread_mutex_t mutex;  // text changing mutex
 } message;
 
@@ -47,8 +48,8 @@ typedef struct{
 typedef struct{
     char name[THREADNAMEMAXLEN+1];  // thread name
     int ID;                         // numeric ID (canopen ID)
-    message commands;               // commands from clients
-    message answers;                // answers from CANserver (raw messages to given ID)
+    message commands;               // commands from clients (char *)
+    message answers;                // answers from CANserver (CANmesg *)
     pthread_t thread;               // thread descriptor
     thread_handler handler;         // handler name & function
 } threadinfo;
@@ -64,7 +65,9 @@ threadinfo *findThreadByID(int ID);
 threadinfo *registerThread(char *name, int ID, thread_handler *handler);
 threadlist *nextThread(threadlist *curr);
 int killThreadByName(const char *name);
-char *getmesg(message *msg);
-char *addmesg(message *msg, char *txt);
+char *mesgGetText(message *msg);
+char *mesgAddText(message *msg, char *txt);
+void *mesgGetObj(message *msg, size_t *size);
+void *mesgAddObj(message *msg, void *data, size_t size);
 
 #endif // THREADLIST_H__

@@ -91,12 +91,6 @@ int main(int argc, char **argv){
         }
     }
     #endif
-
-    /*
-     * INSERT CODE HERE
-     * connection check & device validation
-     */
-    //if(!G->terminal) signals(15); // there's not main controller connected to given terminal
     daemonize(GP->port);
     return 0;
 }

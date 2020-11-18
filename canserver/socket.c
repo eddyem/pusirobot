@@ -153,7 +153,7 @@ static void *server(void *asock){
                 }
             }
         } // endfor
-        char *srvmesg = getmesg(&ServerMessages); // broadcast messages to all clients
+        char *srvmesg = mesgGetText(&ServerMessages); // broadcast messages to all clients
         if(srvmesg){ // send broadcast message to all clients or throw them to /dev/null
             for(int fdidx = 1; fdidx < nfd; ++fdidx){
                 send_data(poll_set[fdidx].fd, srvmesg);

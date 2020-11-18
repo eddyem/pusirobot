@@ -1,0 +1,10 @@
+#raw
+register raw 0 raw
+mesg raw 0x60a 32 1 96 0 0 0 0 0
+
+#canopen
+register x 0x58a canopen 
+mesg x 10 0x6001 0
+
+#emul
+register new 3333 emulation

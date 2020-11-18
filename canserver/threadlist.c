@@ -32,16 +32,18 @@ static threadlist *thelist = NULL;
  * @param v (i)    - data to push
  * @return pointer to just pushed node
  */
-static msglist *pushmessage(msglist **lst, char *v){
+static msglist *pushmessage(msglist **lst, void *v, size_t size){
     if(!lst || !v) return NULL;
     msglist *node;
     if((node = MALLOC(msglist, 1)) == 0)
         return NULL; // allocation error
-    node->data = strdup(v);
+    node->data = malloc(size);
     if(!node->data){
         FREE(node);
         return NULL;
     }
+    memcpy(node->data, v, size);
+    node->size = size;
     if(!*lst){
         *lst = node;
         (*lst)->last = node;
@@ -55,14 +57,16 @@ static msglist *pushmessage(msglist **lst, char *v){
 /**
  * @brief popmessage - get data from head of list
  * @param lst (io) - list
+ * @param size (o) - data size
  * @return data from first node or NULL if absent  (SHOULD BE FREEd AFER USAGE!)
  */
-static char *popmessage(msglist **lst){
+static void *popmessage(msglist **lst, size_t *size){
     if(!lst || !*lst) return NULL;
     char *ret;
     msglist *node = *lst;
     if(node->next) node->next->last = node->last; // pop not last message
     ret = node->data;
+    if(size) *size = node->size;
     *lst = node->next;
     FREE(node);
     return ret;
@@ -115,18 +119,17 @@ threadinfo *findThreadByID(int ID){
 }
 
 /**
- * @brief addmesg - add message to thread's queue
- * @param msg - message itself
- * @param txt - data to add
- * @return data added or NULL if failed
+ * @brief mesgAddObj - add any object to message
+ * @param msg  (i) - message
+ * @param data (i) - any data
+ * @param size     - it's size
+ * @return pointer to message data if success (NULL if failed)
  */
-char *addmesg(message *msg, char *txt){
-    if(!msg) return NULL;
-    size_t L = strlen(txt);
-    if(L < 1) return NULL;
-    DBG("Want to add mesg '%s' with length %zd", txt, L);
+void *mesgAddObj(message *msg, void *data, size_t size){
+    if(!msg || !data || size == 0) return NULL;
+    DBG("Want to add mesg with length %zd", size);
     if(pthread_mutex_lock(&msg->mutex)) return NULL;
-    msglist *node = pushmessage(&msg->text, txt);
+    msglist *node = pushmessage(&msg->msg, data, size);
     if(!node){
         pthread_mutex_unlock(&msg->mutex);
         return NULL;
@@ -136,17 +139,40 @@ char *addmesg(message *msg, char *txt){
 }
 
 /**
- * @brief getmesg - get first message from queue (allocates data, should be free'd after usage!)
+ * @brief mesgAddText - add message to thread's queue
  * @param msg - message itself
- * @return data or NULL if empty
+ * @param txt - data to add
+ * @return data added or NULL if failed
  */
-char *getmesg(message *msg){
+char *mesgAddText(message *msg, char *txt){
+    if(!txt) return NULL;
+    DBG("mesg add text '%s'", txt);
+    size_t l = strlen(txt) + 1;
+    return mesgAddObj(msg, (void*)txt, l);
+}
+
+/**
+ * @brief mesgGetObj - get object from message
+ * @param msg (i)  - message
+ * @param size (o) - object's size or NULL
+ * @return pointer to object or NULL if absent
+ */
+void *mesgGetObj(message *msg, size_t *size){
     if(!msg) return NULL;
     char *text = NULL;
     if(pthread_mutex_lock(&msg->mutex)) return NULL;
-    text = popmessage(&msg->text);
+    text = popmessage(&msg->msg, size);
     pthread_mutex_unlock(&msg->mutex);
     return text;
+}
+
+/**
+ * @brief mesgGetText - get first message from queue (allocates data, should be free'd after usage!)
+ * @param msg - message itself
+ * @return data or NULL if empty
+ */
+char *mesgGetText(message *msg){
+    return (char*) mesgGetObj(msg, NULL);
 }
 
 /**
@@ -212,10 +238,10 @@ int killThread(threadlist *lptr, threadlist *prev){
     else if(prev) prev->next = next;
     char *txt;
     pthread_mutex_lock(&lptr->ti.commands.mutex);
-    while((txt = popmessage(&lptr->ti.commands.text))) FREE(txt);
+    while((txt = popmessage(&lptr->ti.commands.msg, NULL))) FREE(txt);
     pthread_mutex_destroy(&lptr->ti.commands.mutex);
     pthread_mutex_lock(&lptr->ti.answers.mutex);
-    while((txt = popmessage(&lptr->ti.answers.text))) FREE(txt);
+    while((txt = popmessage(&lptr->ti.answers.msg, NULL))) FREE(txt);
     pthread_mutex_destroy(&lptr->ti.answers.mutex);
     if(pthread_cancel(lptr->ti.thread)) WARN("Can't kill thread '%s'", lptr->ti.name);
     FREE(lptr);
