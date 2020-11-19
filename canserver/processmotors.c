@@ -24,6 +24,7 @@
 #include "socket.h"
 
 #include <fcntl.h>      // open
+#include <inttypes.h>   // PRId64
 #include <stdio.h>      // printf
 #include <string.h>     // strcmp
 #include <sys/stat.h>   // open
@@ -37,18 +38,29 @@ static message CANbusMessages = {0}; // CANserver thread is master
 #define CANBUSPUSH(mesg)    mesgAddObj(&CANbusMessages, mesg, sizeof(CANmesg))
 #define CANBUSPOP()         mesgGetObj(&CANbusMessages, NULL)
 
+// commands sent to threads
+// each threadCmd array should be terminated with NULLs; default command `help` shows all names/descriptions
+typedef struct{
+    char *name;     // command name
+    int nargs;      // max arguments number
+    long *args;     // pointer to arguments
+    char *descr;    // description for help
+} threadCmd;
+
 // basic threads
 // messages: master - thread, slave - caller
 static void *stpemulator(void *arg);
 static void *rawcommands(void *arg);
 static void *canopencmds(void *arg);
+static void *simplestp(void *arg);
 
 // handlers for standard types
 thread_handler CANhandlers[] = {
-    {"emulation", stpemulator},
-    {"raw", rawcommands},
-    {"canopen", canopencmds},
-    {NULL, NULL}
+    {"canopen", canopencmds, "NodeID index subindex [data] - raw CANOpen commands with `index` and `subindex` to `NodeID`"},
+    {"emulation", stpemulator, "(list) - stepper emulation"},
+    {"raw", rawcommands, "ID [DATA] - raw CANbus commands to raw `ID` with `DATA`"},
+    {"stepper", simplestp, "(list) - simple stepper motor: no limit switches, only goto"},
+    {NULL, NULL, NULL}
 };
 
 thread_handler *get_handler(const char *name){
@@ -57,6 +69,51 @@ thread_handler *get_handler(const char *name){
         return ret;
     }
     return NULL;
+}
+
+/**
+ * @brief cmdParser - parser of user's comands
+ * @param cmdlist - NULL-terminated array with possible commands
+ * @param cmd - user's command (default command `list` shows all names/descriptions)
+ * @return index of command in `cmdlist` or -1 if something wrong or not found
+ */
+static int cmdParser(threadCmd *cmdlist, char *s){
+    if(!cmdlist || !s) return -1;
+    char *saveptr, *command;
+    int idx = 0;
+    command = strtok_r(s, " \t,;\r\n", &saveptr);
+    if(!command) return -1;
+    if(strcmp(command, "list") == 0){ // just show help
+        char buf[128];
+        while(cmdlist->name){
+            snprintf(buf, 128, "params> %s (%d arguments) - %s",
+                     cmdlist->name, cmdlist->nargs, cmdlist->descr);
+            mesgAddText(&ServerMessages, buf);
+            ++cmdlist;
+        }
+        return 10000;
+    }
+    while(cmdlist->name){
+        if(strcmp(cmdlist->name, command) == 0) break;
+        ++idx; ++cmdlist;
+    }
+    if(!cmdlist->name) return -1; // command not found
+    if(cmdlist->nargs == 0) return idx; // simple command
+    int nargsplus1 = cmdlist->nargs + 1, N = 0;
+    long *args = MALLOC(long, nargsplus1);
+    for(; N < nargsplus1; ++N){
+        char *nxt = strtok_r(NULL, " \t,;\r\n", &saveptr);
+        if(!nxt) break;
+        if(str2long(nxt, &args[N])) break;
+    }
+    if(N != cmdlist->nargs){
+        FREE(args);
+        return -1; // bad arguments number
+    }
+    for(int i = 0; i < N; ++i)
+        cmdlist->args[i] = args[i];
+    FREE(args);
+    return idx;
 }
 
 /**
@@ -116,29 +173,10 @@ static void reopen_device(){
 static void processCANmessage(CANmesg *mesg){
     threadinfo *ti = findThreadByID(0);
     if(ti){
-        /*char buf[64], *ptr = buf;
-        int l = 64, x;
-        x = snprintf(ptr, l, "#0x%03X ", cm.ID);
-        l -= x; ptr += x;
-        for(int i = 0; i < cm.len; ++i){
-            x = snprintf(ptr, l, "0x%02X ", cm.data[i]);
-            l -= x; ptr += x;
-        }*/
         mesgAddObj(&ti->answers, (void*)mesg, sizeof(CANmesg));
     }
     ti = findThreadByID(mesg->ID);
     if(ti){
-       /* DBG("Found");
-        char buf[64], *ptr = buf;
-        int l = 64, x;
-        x = snprintf(ptr, l, "#0x%03X ", mesg->ID);
-        l -= x; ptr += x;
-        for(int i = 0; i < mesg->len; ++i){
-            x = snprintf(ptr, l, "0x%02X ", mesg->data[i]);
-            l -= x; ptr += x;
-        }
-        mesgAddText(&ti->answers, buf);
-        */
         mesgAddObj(&ti->answers, (void*) mesg, sizeof(CANmesg));
     }
 }
@@ -161,7 +199,7 @@ void *CANserver(_U_ void *data){
             FREE(msg);
         }
         usleep(1000);
-        CANmesg cm;
+        CANmesg cm = {0};
         if(!canbus_read(&cm)){ // got raw message from CAN bus - parce it
             DBG("Got CAN message from %d, len: %d", cm.ID, cm.len);
             processCANmessage(&cm);
@@ -254,7 +292,7 @@ static void sendSDO(char *mesg){
 
     CANmesg comesg;
     uint8_t datalen = (uint8_t) N - 3;
-    comesg.data[0] = SDO_CCS(CCS_INIT_DOWNLOAD);
+    comesg.data[0] = (datalen) ? SDO_CCS(CCS_INIT_DOWNLOAD) : SDO_CCS(CCS_INIT_UPLOAD); // write or read
     comesg.len = 8;
     if(datalen){ // there's data
         comesg.data[0] |= SDO_N(datalen) | SDO_E | SDO_S;
@@ -284,8 +322,8 @@ static void *canopencmds(void *arg){
             if(parseSDO(ans, &sdo)){
                 char buf[128], *ptr = buf;
                 int rest = 128;
-                int l = snprintf(ptr, rest, "SDO={nid=0x%02X, idx=0x%04X, subidx=%d, ccs=0x%02X, datalen=%d",
-                         sdo.NID, sdo.index, sdo.subindex, sdo.ccs, sdo.datalen);
+                int l = snprintf(ptr, rest, "%s nid=0x%02X, idx=0x%04X, subidx=%d, ccs=0x%02X, datalen=%d",
+                         ti->name, sdo.NID, sdo.index, sdo.subindex, sdo.ccs, sdo.datalen);
                 ptr += l; rest -= l;
                 if(sdo.datalen){
                     l = snprintf(ptr, rest, ", data=[");
@@ -298,7 +336,6 @@ static void *canopencmds(void *arg){
                     l = snprintf(ptr, rest, "]");
                     ptr += l; rest -= l;
                 }
-                snprintf(ptr, rest, "}");
                 mesgAddText(&ServerMessages, buf);
             }
             FREE(ans);
@@ -309,6 +346,96 @@ static void *canopencmds(void *arg){
     return NULL;
 }
 
+// check incoming SDO and send data to all (thrname - thread name)
+static void chkSDO(const SDO *sdo, const char *thrname){
+    char buf[128];
+    if(!sdo) return;
+    SDO_dic_entry *de = dictentry_search(sdo->index, sdo->subindex);
+    if(!de) return; // SDO not from dictionary
+    const abortcodes *ac = NULL;
+    int64_t val = getSDOval(sdo, de, &ac);
+    if(val == INT_MAX) // zero-length SDO - last command acknowledgement
+        snprintf(buf, 128, "%s %s=OK", thrname, de->varname);
+    else if(val == INT64_MIN) // error
+        snprintf(buf, 128, "%s abortcode='0x%X' error='%s'", thrname, ac->code, ac->errmsg);
+    else // got value
+        snprintf(buf, 128, "%s %s=%" PRId64, thrname, de->varname, val);
+    mesgAddText(&ServerMessages, buf);
+}
+
+/**
+ * @brief simplestp - simplest stepper motor
+ * @param arg - thread identifier
+ * @return not used
+ * Commands:
+ *      maxspeed x: set maximal speed to x pulses per second
+ *      microsteps x: set microstepping to x pulses per step
+ *      move x: move for x pulses (+-)
+ *      status: current position & state
+ *      stop: stop motor
+ */
+static void *simplestp(void *arg){
+    threadinfo _U_ *ti = (threadinfo*)arg;
+    CANmesg can;
+    char buf[128];
+    long parameters[2];
+    threadCmd commands[] = {
+        [0] = {"test", 2, parameters, "show test values"},
+        [1] = {"status", 0, NULL, "get current position and status"},
+        [2] = {"stop", 0, NULL, "stop motor"},
+        [3] = {"absmove", 1, parameters, "absolute move to position x"},
+        {NULL, 0, NULL, NULL}
+    };
+    int NID = ti->ID & NODEID_MASK; // node ID
+    // prepare all
+    CANBUSPUSH(SDO_write(&MAXSPEED, NID, 3200, &can));
+    while(1){
+        char *mesg = mesgGetText(&ti->commands);
+        if(mesg) do{
+            DBG("Got command: %s", mesg);
+            int idx = cmdParser(commands, mesg);
+            DBG("idx = %d", idx);
+            if(-1 == idx){
+                snprintf(buf, 128, "%s wrong command '%s' or bad arguments number", ti->name, mesg);
+                mesgAddText(&ServerMessages, buf);
+            }
+            switch(idx){
+                case 0:
+                    snprintf(buf, 128, "%s get test params: %ld, %ld", ti->name, parameters[0], parameters[1]);
+                    mesgAddText(&ServerMessages, buf);
+                break;
+                case 1: // status, curpos
+                    CANBUSPUSH(SDO_read(&DEVSTATUS, NID, &can));
+                    CANBUSPUSH(SDO_read(&POSITION, NID, &can));
+                    CANBUSPUSH(SDO_read(&ERRSTATE, NID, &can));
+                break;
+                case 2: // stop
+                    CANBUSPUSH(SDO_write(&STOP, NID, 1, &can));
+                break;
+                case 3: // absmove
+                    /*if(parameters[0] < 0){
+                        CANBUSPUSH(SDO_write(&RELSTEPS, NID, parameters[0], &can));
+                        parameters[0] = -parameters[0];
+                    }*/
+                    CANBUSPUSH(SDO_write(&ABSSTEPS, NID, parameters[0], &can));
+                break;
+                default:
+                break;
+            }
+            FREE(mesg);
+        }while(0);
+        CANmesg *ans = (CANmesg*)mesgGetObj(&ti->answers, NULL);
+        if(ans) do{
+            SDO sdo;
+            if(!parseSDO(ans, &sdo)) break;
+            chkSDO(&sdo, ti->name);
+            FREE(ans);
+        }while(0);
+        usleep(1000);
+    }
+    LOGERR("simplestp(): UNREACHABLE CODE REACHED!");
+    return NULL;
+}
 
 /**
  * @brief setCANspeed - set new speed of CANbus

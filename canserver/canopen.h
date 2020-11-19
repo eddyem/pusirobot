@@ -77,14 +77,18 @@ typedef struct{
     uint8_t ccs;        // Client command specifier
 } SDO;
 
-const char *abortcode_text(uint32_t abortcode);
-SDO *parseSDO(CANmesg *mesg, SDO *sdo);
+typedef struct{
+    uint32_t code;
+    const char *errmsg;
+} abortcodes;
+
+CANmesg *mkMesg(SDO *sdo, CANmesg *mesg);
+
+SDO *parseSDO(const CANmesg *mesg, SDO *sdo);
 SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID, SDO *sdo);
-
-int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID);
-
-int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data);
-int SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data);
+int64_t getSDOval(const SDO *sdo, const SDO_dic_entry *e, const abortcodes **ac);
+CANmesg *SDO_read(const SDO_dic_entry *e, uint8_t NID, CANmesg *cm);
+CANmesg *SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data, CANmesg *cm);
 
 //int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID);
 #endif // CANOPEN_H__

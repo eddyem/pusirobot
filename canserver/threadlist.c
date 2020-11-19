@@ -146,7 +146,7 @@ void *mesgAddObj(message *msg, void *data, size_t size){
  */
 char *mesgAddText(message *msg, char *txt){
     if(!txt) return NULL;
-    DBG("mesg add text '%s'", txt);
+    DBG("mesgAddText(%s)", txt);
     size_t l = strlen(txt) + 1;
     return mesgAddObj(msg, (void*)txt, l);
 }

@@ -22,14 +22,12 @@
 
 // we should init constants here!
 #undef DICENTRY
-#define DICENTRY(name, idx, sidx, sz, s, n)  const SDO_dic_entry name = {idx, sidx, sz, s, n};
+#define DICENTRY(name, idx, sidx, sz, s, n, v)  const SDO_dic_entry name = {idx, sidx, sz, s, n, v};
 #include "dicentries.in"
 
 // now init array with all dictionary
 #undef DICENTRY
-#define nnn(nm)  nm
-#define lnk(nm) & ## nnn(nm)
-#define DICENTRY(name, idx, sidx, sz, s, n)  &name,
+#define DICENTRY(name, idx, sidx, sz, s, n, v)  &name,
 const SDO_dic_entry* allrecords[] = {
 #include "dicentries.in"
 };

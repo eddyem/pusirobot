@@ -24,12 +24,6 @@
 
 #include "canopen.h"
 
-typedef struct{
-    uint32_t code;
-    const char *errmsg;
-} abortcodes;
-
-
 static const abortcodes AC[] = {
     //while read l; do N=$(echo $l|awk '{print $1 $2}'); R=$(echo $l|awk '{$1=$2=""; print substr($0,3)}'|sed 's/\.//'); echo -e "{0x$N, \"$R\"},"; done < codes.b
     {0x05030000, "Toggle bit not alternated"},
@@ -65,21 +59,19 @@ static const abortcodes AC[] = {
 
 static const int ACmax = sizeof(AC)/sizeof(abortcodes) - 1;
 
+// used
 /**
- * @brief abortcode_text - explanation of abort code
+ * @brief abortcode_search - explanation of abort code
  * @param abortcode - code
- * @return text for error or NULL
+ * @return abortcode found or NULL
  */
-const char *abortcode_text(uint32_t abortcode){ //, int *n){
+static const abortcodes *abortcode_search(uint32_t abortcode){ //, int *n){
     int idx = ACmax/2, min_ = 0, max_ = ACmax, newidx = 0, iter=0;
     do{
         ++iter;
         uint32_t c = AC[idx].code;
-        //printf("idx=%d, min=%d, max=%d\n", idx, min_, max_);
         if(c == abortcode){
-            //if(n) *n = iter;
-            //DBG("got : %s", AC[idx].errmsg);
-            return AC[idx].errmsg;
+            return &AC[idx];
         }else if(c > abortcode){
             newidx = (idx + min_)/2;
             max_ = idx;
@@ -89,37 +81,43 @@ const char *abortcode_text(uint32_t abortcode){ //, int *n){
             min_ = idx;
         }
         if(newidx == idx || min_ < 0 || max_ > ACmax){
-            //if(n) *n = 0;
             return NULL;
         }
         idx = newidx;
     }while(1);
 }
 
-// make CAN message from sdo object; don't support more then one block/packet
-static CANmesg *mkMesg(SDO *sdo){
-    static CANmesg mesg;
-    mesg.ID = RSDO_COBID + sdo->NID;
-    mesg.len = 8;
-    memset(mesg.data, 0, 8);
-    mesg.data[0] = SDO_CCS(sdo->ccs);
+// used
+/**
+ * @brief mkMesg - make CAN message from sdo object
+ * @param sdo (i)  - sdo object to transform
+ * @param mesg (o) - output CANmesg
+ * @return pointer to mesg
+ */
+CANmesg *mkMesg(SDO *sdo, CANmesg *mesg){
+    if(!sdo || !mesg) return NULL;
+    mesg->ID = RSDO_COBID + sdo->NID;
+    mesg->len = 8;
+    memset(mesg->data, 0, 8);
+    mesg->data[0] = SDO_CCS(sdo->ccs);
     if(sdo->datalen){ // send N bytes of data
-        mesg.data[0] |= SDO_N(sdo->datalen) | SDO_E | SDO_S;
-        for(uint8_t i = 0; i < sdo->datalen; ++i) mesg.data[4+i] = sdo->data[i];
+        mesg->data[0] |= SDO_N(sdo->datalen) | SDO_E | SDO_S;
+        for(uint8_t i = 0; i < sdo->datalen; ++i) mesg->data[4+i] = sdo->data[i];
     }
-    mesg.data[1] = sdo->index & 0xff; // l
-    mesg.data[2] = (sdo->index >> 8) & 0xff; // h
-    mesg.data[3] = sdo->subindex;
-    return &mesg;
+    mesg->data[1] = sdo->index & 0xff; // l
+    mesg->data[2] = (sdo->index >> 8) & 0xff; // h
+    mesg->data[3] = sdo->subindex;
+    return mesg;
 }
 
+// used
 /**
  * @brief parseSDO - transform CAN-message to SDO
  * @param mesg (i) - message
  * @param sdo (o)  - SDO
  * @return sdo or NULL depending on result
  */
-SDO *parseSDO(CANmesg *mesg, SDO *sdo){
+SDO *parseSDO(const CANmesg *mesg, SDO *sdo){
     if(mesg->len != 8){
         WARNX("Wrong SDO data length");
         return NULL;
@@ -137,7 +135,7 @@ SDO *parseSDO(CANmesg *mesg, SDO *sdo){
     if((spec & SDO_E) && (spec & SDO_S)) sdo->datalen = SDO_datalen(spec);
     else if(sdo->ccs == CCS_ABORT_TRANSFER) sdo->datalen = 4; // error code
     else sdo->datalen = 0; // no data in message
-    for(uint8_t i = 0; i < sdo->datalen; ++i) sdo->data[i] = mesg->data[4+i];
+    for(uint8_t i = 0; i < 4; ++i) sdo->data[i] = mesg->data[4+i];
     DBG("Got TSDO from NID=%d, ccs=%u, index=0x%X, subindex=0x%X, datalen=%d",
         sdo->NID, sdo->ccs, sdo->index, sdo->subindex, sdo->datalen);
     return sdo;
@@ -151,8 +149,8 @@ static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
     sdo.datalen = 0;
     sdo.index = idx;
     sdo.subindex = subidx;
-    CANmesg *mesg = mkMesg(&sdo);
-    return canbus_write(mesg);
+    CANmesg mesg;
+    return canbus_write(mkMesg(&sdo, &mesg));
 }
 
 static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID, SDO *sdo){
@@ -195,72 +193,160 @@ SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID, SDO *sdo){
     return getSDOans(idx, subidx, NID, sdo);
 }
 
-static inline uint32_t mku32(uint8_t data[4]){
+// mk... are all used
+static inline uint32_t mku32(const uint8_t data[4]){
     return (uint32_t)(data[0] | (data[1]<<8) | (data[2]<<16) | (data[3]<<24));
 }
 
-static inline uint16_t mku16(uint8_t data[4]){
+static inline uint16_t mku16(const uint8_t data[4]){
     return (uint16_t)(data[0] | (data[1]<<8));
 }
 
-static inline uint8_t mku8(uint8_t data[4]){
+static inline uint8_t mku8(const uint8_t data[4]){
     return data[0];
 }
 
-static inline int32_t mki32(uint8_t data[4]){
+static inline int32_t mki32(const uint8_t data[4]){
     return (int32_t)(data[0] | (data[1]<<8) | (data[2]<<16) | (data[3]<<24));
 }
 
-static inline int16_t mki16(uint8_t data[4]){
+static inline int16_t mki16(const uint8_t data[4]){
     return (int16_t)(data[0] | (data[1]<<8));
 }
 
-static inline int8_t mki8(uint8_t data[4]){
+static inline int8_t mki8(const uint8_t data[4]){
     return (int8_t)data[0];
 }
 
-// read SDO value, if error - return INT64_MIN
-int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
-    FNAME();
-    SDO sdo;
-    if(!readSDOvalue(e->index, e->subindex, NID, &sdo)){
-        return INT64_MIN;
-    }
-    if(sdo.ccs == CCS_ABORT_TRANSFER){ // error
+// used
+/**
+ * @brief getSDOval - get value from SDO
+ * @param sdo (i) - SDO
+ * @param e (i)   - its dictionary entry
+ * @param ac (o)  - pointer for abort code (in case of error) or NULL
+ * @return value, INT64_MIN in case of error or INT64_MAX in case of zero-length
+ */
+int64_t getSDOval(const SDO *sdo, const SDO_dic_entry *e, const abortcodes **ac){
+    if(sdo->ccs == CCS_ABORT_TRANSFER){ // error
         WARNX("Got error for SDO 0x%X", e->index);
-        uint32_t ac = mku32(sdo.data);
-        const char *etxt = abortcode_text(ac);
-        if(etxt) WARNX("Abort code 0x%X: %s", ac, etxt);
+        uint32_t c = mku32(sdo->data);
+        const abortcodes *abc = abortcode_search(c);
+        if(abc) WARNX("Abort code 0x%X: %s", ac, abc->errmsg);
+        if(ac) *ac = abc;
         return INT64_MIN;
     }
-    if(sdo.datalen != e->datasize){
-        WARNX("Got SDO with length %d instead of %d (as in dictionary)", sdo.datalen, e->datasize);
+    if(sdo->datalen == 0) return INT_MAX;
+    if(sdo->datalen != e->datasize){
+        WARNX("Got SDO with length %d instead of %d (as in dictionary)", sdo->datalen, e->datasize);
     }
     int64_t ans = 0;
     if(e->issigned){
-        switch(sdo.datalen){
+        switch(sdo->datalen){
             case 1:
-                ans = mki8(sdo.data);
+                ans = mki8(sdo->data);
             break;
             case 4:
-                ans = mki32(sdo.data);
+                ans = mki32(sdo->data);
             break;
             default: // can't be 3! 3->2
-                ans = mki16(sdo.data);
+                ans = mki16(sdo->data);
         }
     }else{
-        switch(sdo.datalen){
+        switch(sdo->datalen){
             case 1:
-                ans = mku8(sdo.data);
+                ans = mku8(sdo->data);
             break;
             case 4:
-                ans = mku32(sdo.data);
+                ans = mku32(sdo->data);
             break;
             default: // can't be 3! 3->2
-                ans = mku16(sdo.data);
+                ans = mku16(sdo->data);
         }
     }
     return ans;
+}
+
+// used
+/**
+ * @brief SDO_read - form CANmesg to read SDO entry `e`
+ * @param e  (i) - SDO dictionary entry to read
+ * @param NID    - target node ID
+ * @param cm (o) - pointer to CANmesg which to modify
+ * @return `cm` or NULL if failed
+ */
+CANmesg *SDO_read(const SDO_dic_entry *e, uint8_t NID, CANmesg *cm){
+    if(!e || !cm) return NULL;
+    SDO sdo = {
+        .NID = NID,
+        .ccs = CCS_INIT_UPLOAD,
+        .index = e->index,
+        .subindex = e->subindex
+    };
+    /*sdo.NID = NID;
+    sdo.ccs = CCS_INIT_UPLOAD;
+    sdo.index = e->index;
+    sdo.subindex = e->subindex;*/
+    return mkMesg(&sdo, cm);
+}
+
+// used
+/**
+ * @brief SDO_write - form CANmesg to write `data` to SDO entry `e`
+ * @param e
+ * @param NID
+ * @param cm
+ * @return
+ */
+CANmesg *SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data, CANmesg *cm){
+    if(!e || !cm) return NULL;
+    uint32_t U;
+    int32_t I;
+    uint16_t U16;
+    int16_t I16;
+    SDO sdo;
+    sdo.NID = NID;
+    sdo.ccs = CCS_INIT_DOWNLOAD;
+    sdo.datalen = e->datasize;
+    sdo.index = e->index;
+    sdo.subindex = e->subindex;
+    DBG("datalen=%d, signed=%d", e->datasize, e->issigned);
+    if(e->issigned){
+        switch(e->datasize){
+            case 1:
+                sdo.data[0] = (uint8_t) data;
+            break;
+            case 4:
+                I = (int32_t) data;
+                sdo.data[0] = I&0xff;
+                sdo.data[1] = (I>>8)&0xff;
+                sdo.data[2] = (I>>16)&0xff;
+                sdo.data[3] = (I>>24)&0xff;
+            break;
+            default: // can't be 3! 3->2
+                I16 = (int16_t) data;
+                sdo.data[0] = I16&0xff;
+                sdo.data[1] = (I16>>8)&0xff;
+        }
+    }else{
+        switch(e->datasize){
+            case 1:
+                sdo.data[0] = (uint8_t) data;
+            break;
+            case 4:
+                U = (uint32_t) data;
+                sdo.data[0] = U&0xff;
+                sdo.data[1] = (U>>8)&0xff;
+                sdo.data[2] = (U>>16)&0xff;
+                sdo.data[3] = (U>>24)&0xff;
+            break;
+            default: // can't be 3! 3->2
+                U16 = (uint16_t) data;
+                sdo.data[0] = U16&0xff;
+                sdo.data[1] = (U16>>8)&0xff;
+        }
+    }
+    mkMesg(&sdo, cm);
+    return cm;
 }
 
 // write SDO data, return 0 if all OK
@@ -277,9 +363,10 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     for(uint8_t i = 0; i < e->datasize; ++i) sdo.data[i] = data[i];
     sdo.index = e->index;
     sdo.subindex = e->subindex;
-    CANmesg *mesgp = mkMesg(&sdo);
+    CANmesg mesgp;
+    mkMesg(&sdo, &mesgp);
     DBG("Canbus write..");
-    if(canbus_write(mesgp)){
+    if(canbus_write(&mesgp)){
         WARNX("SDO_write(): Can't initiate download");
         return 2;
     }
@@ -292,8 +379,8 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     if(sdop.ccs == CCS_ABORT_TRANSFER){ // error
         WARNX("SDO_write(): Got error for SDO 0x%X", e->index);
         uint32_t ac = mku32(sdop.data);
-        const char *etxt = abortcode_text(ac);
-        if(etxt) WARNX("Abort code 0x%X: %s", ac, etxt);
+        const abortcodes *e = abortcode_search(ac);
+        if(e) WARNX("Abort code 0x%X: %s", ac, e->errmsg);
         return 4;
     }
     if(sdop.datalen != 0){
@@ -306,75 +393,3 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     }
     return 0;
 }
-
-int SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data){
-    if(!e) return 1;
-    uint8_t arr[4] = {0};
-    uint32_t U;
-    int32_t I;
-    uint16_t U16;
-    int16_t I16;
-    if(e->issigned){
-        switch(e->datasize){
-            case 1:
-                arr[0] = (uint8_t) data;
-            break;
-            case 4:
-                I = (int32_t) data;
-                arr[0] = I&0xff;
-                arr[1] = (I>>8)&0xff;
-                arr[2] = (I>>16)&0xff;
-                arr[3] = (I>>24)&0xff;
-            break;
-            default: // can't be 3! 3->2
-                I16 = (int16_t) data;
-                arr[0] = I16&0xff;
-                arr[1] = (I16>>8)&0xff;
-        }
-    }else{
-        switch(e->datasize){
-            case 1:
-                arr[0] = (uint8_t) data;
-            break;
-            case 4:
-                U = (uint32_t) data;
-                arr[0] = U&0xff;
-                arr[1] = (U>>8)&0xff;
-                arr[2] = (U>>16)&0xff;
-                arr[3] = (U>>24)&0xff;
-            break;
-            default: // can't be 3! 3->2
-                U16 = (uint16_t) data;
-                arr[0] = U16&0xff;
-                arr[1] = (U16>>8)&0xff;
-        }
-    }
-    /*
-    DBG("DATA:");
-    for(int i = 0; i < e->datasize; ++i) printf("0x%X ", arr[i]);
-    printf("\n");
-    return 0;*/
-    return SDO_writeArr(e, NID, arr);
-}
-
-
-
-// read one byte of data
-/*int SDO_readByte(uint16_t idx, uint8_t subidx, uint8_t *data, uint8_t NID){
-    SDO *sdo = readSDOvalue(idx, subidx, NID);
-    if(!sdo || sdo->datalen != 1){
-        WARNX("Got SDO with wrong data length: %d instead of 1", sdo->datalen);
-        return 1;
-    }
-    if(data) *data = sdo->data[0];
-    return 0;
-}*/
-
-#if 0
-// write uint8_t to SDO with index idx & subindex subidx to NID
-void SDO_writeU8(uint16_t idx, uint8_t subidx, uint8_t data, uint8_t NID){
-    SDO sdo;
-    sdo.NID = NID;
-    sdo.ccs = CCS_INIT_DOWNLOAD;
-}
-#endif

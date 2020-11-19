@@ -21,123 +21,78 @@
 // variable name / index / subindex / datasize / issigned / name
 
 // heartbeat time
-DICENTRY(HEARTBTTIME,   0x1017, 0, 2, 0, "heartbeat time")
-
-// receive PDO parameter 0
-// largest subindex supported
-DICENTRY(RPDOP0LS,      0x1400, 0, 1, 0, "receive PDO parameter 0, largest subindex supported")
-// COB-ID used by PDO
-DICENTRY(RPDOP0CI,      0x1400, 1, 4, 0, "receive PDO parameter 0, COB-ID used by PDO")
-// transmission type
-DICENTRY(RPDOP0TT,      0x1400, 2, 1, 0, "receive PDO parameter 0, transmission type")
-// inhibit time
-DICENTRY(RPDOP0IT,      0x1400, 3, 2, 0, "receive PDO parameter 0, inhibit time")
-// compatibility entry
-DICENTRY(RPDOP0CE,      0x1400, 4, 1, 0, "receive PDO parameter 0, compatibility entry")
-// event timer
-DICENTRY(RPDOP0ET,      0x1400, 5, 2, 0, "receive PDO parameter 0, event timer")
-
-// receive PDO mapping 0
-// number of mapped application objects
-DICENTRY(RPDOM0N,       0x1600, 0, 1, 0, "receive PDO mapping 0, number of objects")
-// first map
-DICENTRY(RPDOM0O1,      0x1600, 1, 4, 0, "receive PDO mapping 0, mapping for 1st object")
-
-// transmit PDO parameter 0
-// largest subindex supported
-DICENTRY(TPDOP0LS,      0x1800, 0, 1, 0, "transmit PDO parameter 0, largest subindex supported")
-// COB-ID used by PDO
-DICENTRY(TPDOP0CI,      0x1800, 1, 4, 0, "transmit PDO parameter 0, COB-ID used by PDO")
-// transmission type
-DICENTRY(TPDOP0TT,      0x1800, 2, 1, 0, "transmit PDO parameter 0, transmission type")
-// inhibit time
-DICENTRY(TPDOP0IT,      0x1800, 3, 2, 0, "transmit PDO parameter 0, inhibit time")
-// reserved
-DICENTRY(TPDOP0R,       0x1800, 4, 1, 0, "transmit PDO parameter 0, reserved")
-// event timer
-DICENTRY(TPDOP0ET,      0x1800, 5, 2, 0, "transmit PDO parameter 0, event timer")
-
-// transmit PDO mapping 0
-// number of mapped application objects
-DICENTRY(TPDOM0N,       0x1A00, 0, 1, 0, "transmit PDO mapping 0, number of objects")
-// first map
-DICENTRY(TPDOM0O1,      0x1A00, 1, 4, 0, "transmit PDO mapping 0, mapping for 1st object")
-DICENTRY(TPDOM0O2,      0x1A00, 2, 4, 0, "transmit PDO mapping 0, mapping for 2nd object")
-DICENTRY(TPDOM0O3,      0x1A00, 3, 4, 0, "transmit PDO mapping 0, mapping for 3rd object")
-DICENTRY(TPDOM0O4,      0x1A00, 4, 4, 0, "transmit PDO mapping 0, mapping for 4th object")
-DICENTRY(TPDOM0O5,      0x1A00, 5, 4, 0, "transmit PDO mapping 0, mapping for 5th object")
-
+DICENTRY(HEARTBTTIME,   0x1017, 0, 2, 0, "heartbeat time", "hearbt")
 // node ID
-DICENTRY(NODEID,        0x2002, 0, 1, 0, "node ID")
+DICENTRY(NODEID,        0x2002, 0, 1, 0, "node ID", "nodeid")
 // baudrate
-DICENTRY(BAUDRATE,      0x2003, 0, 1, 0, "baudrate")
+DICENTRY(BAUDRATE,      0x2003, 0, 1, 0, "baudrate", "baudrate")
 // system control: 1- bootloader, 2 - save parameters, 3 - reset factory settings
-DICENTRY(SYSCONTROL,    0x2007, 0, 1, 0, "system control: 1- bootloader, 2 - save parameters, 3 - reset factory settings")
+DICENTRY(SYSCONTROL,    0x2007, 0, 1, 0, "system control: 1- bootloader, 2 - save parameters, 3 - reset factory settings", "syscontrol")
 // error status
-DICENTRY(ERRSTATE,      0x6000, 0, 1, 0, "error status")
+DICENTRY(ERRSTATE,      0x6000, 0, 1, 0, "error status", "errstatus")
 // controller status
-DICENTRY(DEVSTATUS,     0x6001, 0, 1, 0, "controller status")
+DICENTRY(DEVSTATUS,     0x6001, 0, 1, 0, "controller status", "devstatus")
 // rotation direction
-DICENTRY(ROTDIR,        0x6002, 0, 1, 0, "rotation direction")
+DICENTRY(ROTDIR,        0x6002, 0, 1, 0, "rotation direction", "rotdir")
 // maximal speed
-DICENTRY(MAXSPEED,      0x6003, 0, 4, 1, "maximal speed")
+DICENTRY(MAXSPEED,      0x6003, 0, 4, 1, "maximal speed", "maxspeed")
 // relative displacement
-DICENTRY(RELSTEPS,      0x6004, 0, 4, 0, "relative displacement")
+DICENTRY(RELSTEPS,      0x6004, 0, 4, 0, "relative displacement", "relsteps")
 // operation mode
-DICENTRY(OPMODE,        0x6005, 0, 1, 0, "operation mode")
+DICENTRY(OPMODE,        0x6005, 0, 1, 0, "operation mode", "opmode")
 // start speed
-DICENTRY(STARTSPEED,    0x6006, 0, 2, 0, "start speed")
+DICENTRY(STARTSPEED,    0x6006, 0, 2, 0, "start speed", "startspd")
 // stop speed
-DICENTRY(STOPSPEED,     0x6007, 0, 2, 0, "stop speed")
+DICENTRY(STOPSPEED,     0x6007, 0, 2, 0, "stop speed", "stopspd")
 // acceleration coefficient
-DICENTRY(ACCELCOEF,     0x6008, 0, 1, 0, "acceleration coefficient")
+DICENTRY(ACCELCOEF,     0x6008, 0, 1, 0, "acceleration coefficient", "acccoef")
 // deceleration coefficient
-DICENTRY(DECELCOEF,     0x6009, 0, 1, 0, "deceleration coefficient")
+DICENTRY(DECELCOEF,     0x6009, 0, 1, 0, "deceleration coefficient", "deccoef")
 // microstepping
-DICENTRY(MICROSTEPS,    0x600A, 0, 2, 0, "microstepping")
+DICENTRY(MICROSTEPS,    0x600A, 0, 2, 0, "microstepping", "microsteps")
 // max current
-DICENTRY(MAXCURNT,      0x600B, 0, 2, 0, "maximum phase current")
+DICENTRY(MAXCURNT,      0x600B, 0, 2, 0, "maximum phase current", "maxcurnt")
 // current position
-DICENTRY(POSITION,      0x600C, 0, 4, 0, "current position")
+DICENTRY(POSITION,      0x600C, 0, 4, 0, "current position", "curpos")
 // current reduction
-DICENTRY(CURRREDUCT,    0x600D, 0, 1, 0, "current reduction")
+DICENTRY(CURRREDUCT,    0x600D, 0, 1, 0, "current reduction", "curred")
 // motor enable
-DICENTRY(ENABLE,        0x600E, 0, 1, 0, "motor enable")
+DICENTRY(ENABLE,        0x600E, 0, 1, 0, "motor enable", "enable")
 // EXT emergency stop enable
-DICENTRY(EXTENABLE,     0x600F, 1, 1, 0, "EXT emergency stop enable")
+DICENTRY(EXTENABLE,     0x600F, 1, 1, 0, "EXT emergency stop enable", "extenable")
 // EXT emergency stop trigger mode
-DICENTRY(EXTTRIGMODE,   0x600F, 2, 1, 0, "EXT emergency stop trigger mode")
+DICENTRY(EXTTRIGMODE,   0x600F, 2, 1, 0, "EXT emergency stop trigger mode", "exttrigmod")
 // EXT emergency sensor type
-DICENTRY(EXTSENSTYPE,   0x600F, 3, 1, 0, "EXT emergency sensor type")
+DICENTRY(EXTSENSTYPE,   0x600F, 3, 1, 0, "EXT emergency sensor type", "extsenstype")
 // GPIO direction
-DICENTRY(GPIODIR,       0x6011, 1, 2, 0, "GPIO direction")
+DICENTRY(GPIODIR,       0x6011, 1, 2, 0, "GPIO direction", "gpiodir")
 // GPIO configuration
-DICENTRY(GPIOCONF,      0x6011, 2, 4, 0, "GPIO configuration")
+DICENTRY(GPIOCONF,      0x6011, 2, 4, 0, "GPIO configuration", "gpioconf")
 // GPIO value
-DICENTRY(GPIOVAL,       0x6012, 0, 2, 0, "GPIO value")
+DICENTRY(GPIOVAL,       0x6012, 0, 2, 0, "GPIO value", "gpioval")
 // stall parameters
-DICENTRY(STALLPARS,     0x6017, 0, 2, 0, "stall parameters (open loop)")
+DICENTRY(STALLPARS,     0x6017, 0, 2, 0, "stall parameters (open loop)", "stallpars")
 // offline operation
-DICENTRY(OFFLNMBR,      0x6018, 1, 1, 0, "Number of offline programming command")
-DICENTRY(OFFLENBL,      0x6018, 2, 1, 0, "Offline automatic operation enable")
+DICENTRY(OFFLNMBR,      0x6018, 1, 1, 0, "Number of offline programming command", "offlnmbr")
+DICENTRY(OFFLENBL,      0x6018, 2, 1, 0, "Offline automatic operation enable", "offlenbl")
 // stall set
-DICENTRY(STALLSET,      0x601B, 0, 1, 0, "stall set (open loop)")
+DICENTRY(STALLSET,      0x601B, 0, 1, 0, "stall set (open loop)", "stallset")
 // absolute displacement
-DICENTRY(ABSSTEPS,      0x601C, 0, 4, 1, "absolute displacement")
+DICENTRY(ABSSTEPS,      0x601C, 0, 4, 1, "absolute displacement", "abssteps")
 // stop motor
-DICENTRY(STOP,          0x6020, 0, 1, 0, "stop motor")
+DICENTRY(STOP,          0x6020, 0, 1, 0, "stop motor", "stop")
 // encoder resolution
-DICENTRY(ENCRESOL,      0x6021, 0, 2, 0, "encoder resolution (closed loop)")
+DICENTRY(ENCRESOL,      0x6021, 0, 2, 0, "encoder resolution (closed loop)", "encresol")
 // stall length parameter
-DICENTRY(STALLLEN,      0x6028, 0, 2, 0, "stall length parameter (closed loop)")
+DICENTRY(STALLLEN,      0x6028, 0, 2, 0, "stall length parameter (closed loop)", "stallen")
 // torque ring enable
-DICENTRY(TORQRING,      0x6029, 0, 1, 0, "torque ring enable (closed loop)")
+DICENTRY(TORQRING,      0x6029, 0, 1, 0, "torque ring enable (closed loop)", "torqring")
 // autosave position
-DICENTRY(POSAUTOSAVE,   0x602A, 0, 1, 0, "autosave position (closed loop)")
+DICENTRY(POSAUTOSAVE,   0x602A, 0, 1, 0, "autosave position (closed loop)", "autosave")
 // real time speed
-DICENTRY(REALTIMESPD,   0x6030, 0, 2, 1, "real time speed (closed loop)")
+DICENTRY(REALTIMESPD,   0x6030, 0, 2, 1, "real time speed (closed loop)", "realtimespd")
 // calibration zero
-DICENTRY(CALIBZERO,     0x6034, 0, 4, 1, "calibration zero")
+DICENTRY(CALIBZERO,     0x6034, 0, 4, 1, "calibration zero", "calibzero")
 // encoder position
-DICENTRY(ENCPOS,        0x6035, 0, 4, 1, "encoder position")
+DICENTRY(ENCPOS,        0x6035, 0, 4, 1, "encoder position", "encpos")
 

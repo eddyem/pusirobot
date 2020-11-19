@@ -8,3 +8,13 @@ mesg x 10 0x6001 0
 
 #emul
 register new 3333 emulation
+
+#stepper
+register x 0x58a stepper
+
+
+
+#define getSDOe(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else ERRX(e);}while(0)
+
+getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
+

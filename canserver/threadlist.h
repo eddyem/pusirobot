@@ -42,6 +42,7 @@ typedef struct{
 typedef struct{
     const char *name;               // handler name
     void *(*handler)(void *);       // handler function
+    const char *helpmesg;           // help message
 } thread_handler;
 
 // thread information

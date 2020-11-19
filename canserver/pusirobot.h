@@ -28,11 +28,11 @@ typedef struct{
     uint8_t datasize;   // data size: 1,2,3 or 4 bytes
     uint8_t issigned;   // signess: if issigned==1, then signed, else unsigned
     const char *name;   // dictionary entry name
+    const char *varname;// variable name for output
 } SDO_dic_entry;
 
-#ifndef DICENTRY
-#define DICENTRY(name, idx, sidx, sz, s, n)  extern const SDO_dic_entry name;
-#endif
+#undef DICENTRY
+#define DICENTRY(name, idx, sidx, sz, s, n, v)  extern const SDO_dic_entry name;
 
 #include "dicentries.in"
 

@@ -196,5 +196,6 @@ int str2long(char *str, long* l){
     long n = strtol(str, &eptr, 0);
     if(*eptr) return 2; // wrong symbols in number
     if(l) *l = n;
+    //DBG("str '%s' to long %ld", str, n);
     return 0;
 }

@@ -122,8 +122,10 @@ static void *server(void *asock){
                     close(fd);
                     DBG("Client with fd %d closed", fd);
                     LOGMSG("Client %d disconnected", fd);
-                    for(int i = fdidx; i < nfd; ++i)
-                        poll_set[i] = poll_set[i + 1];
+                    // move last to free space
+                    poll_set[fdidx] = poll_set[nfd - 1];
+                    //for(int i = fdidx; i < nfd-1; ++i)
+                    //    poll_set[i] = poll_set[i + 1];
                     --nfd;
                 }
             }else{ // server

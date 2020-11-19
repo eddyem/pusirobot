@@ -32,7 +32,10 @@ static const char *ANS_OK = "OK";
 static const char *ANS_WRONGCANID = "Wrong CANID";
 static const char *ANS_NOTFOUND = "Thread not found";
 static const char *ANS_CANTSEND = "Can't send message";
+static const char *ANS_WRONGMESG = "Wrong message";
 
+static const char *shelp(_U_ char *par1, _U_ char *par2);
+static const char *sthrds(_U_ char *par1, _U_ char *par2);
 static const char *listthr(_U_ char *par1, _U_ char *par2);
 static const char *regthr(char *thrname, char *data);
 static const char *unregthr(char *thrname, char *data);
@@ -49,19 +52,46 @@ static const char *setspd(char *speed, _U_ char *data);
  * you can get full list of functions by function `help`
  */
 typedef struct{
-    const char *fname; // function name
+    const char *fname;      // function name
     const char *(*handler)(char *arg1, char *arg2); // data handler (arg1 and arg2 could be changed)
+    const char *helpmesg;   // help message
 } cmditem;
 
 // array with known functions
 static cmditem functions[] = {
-    {"list", listthr},          // list threads
-    {"mesg", sendmsg},          // "mesg NAME ID [data]"
-    {"register", regthr},       // "register NAME ID", ID - RAW CAN ID (not canopen ID)!!!
-    {"speed", setspd},          // set CANbus speed
-    {"unregister", unregthr},   // "unregister NAME"
-    {NULL, NULL}
+    {"help", shelp, "- show help"},
+    {"list", listthr, "- list all threads"},
+    {"mesg", sendmsg, "NAME MESG - send message `MESG` to thread `NAME`"},
+    {"register", regthr, "NAME ID ROLE - register new thread with `NAME`, raw receiving `ID` running thread `ROLE`"},
+    {"speed", setspd, "SPD - set CANbus speed to `SPD`"},
+    {"threads", sthrds, "- list all possible threads with their message format"},
+    {"unregister", unregthr, "NAME - kill thread `NAME`"},
+    {NULL, NULL, NULL}
 };
+
+// show help
+static const char *shelp(_U_ char *par1, _U_ char *par2){
+    char buf[128];
+    cmditem *ptr = functions;
+    while(ptr->fname){
+        snprintf(buf, 128, "help> %s %s", ptr->fname, ptr->helpmesg);
+        mesgAddText(&ServerMessages, buf);
+        ++ptr;
+    }
+    return NULL;
+}
+
+// show all possible threads
+static const char *sthrds(_U_ char *par1, _U_ char *par2){
+    char buf[128];
+    thread_handler *h = CANhandlers;
+    while(h->name){
+        snprintf(buf, 128, "thread> %s %s", h->name, h->helpmesg);
+        mesgAddText(&ServerMessages, buf);
+        ++h;
+    }
+    return NULL;
+}
 
 // list all threads
 static const char *listthr(_U_ char *par1, _U_ char *par2){
@@ -72,10 +102,11 @@ static const char *listthr(_U_ char *par1, _U_ char *par2){
     do{
         list = nextThread(list);
         if(!list) break;
-        snprintf(msg, 256, "thread name='%s' role='%s' ID=0x%X", list->ti.name, list->ti.handler.name, list->ti.ID);
+        snprintf(msg, 256, "thread> name='%s' role='%s' ID=0x%X", list->ti.name, list->ti.handler.name, list->ti.ID);
         mesgAddText(&ServerMessages, msg);
         empty = 0;
     }while(1);
+    mesgAddText(&ServerMessages, "thread> Send message 'list' to thread marked with (list) to get commands list");
     if(empty) return "No threads";
     return NULL;
 }
@@ -130,6 +161,13 @@ static const char *unregthr(char *thrname, _U_ char *data){
  */
 static const char *sendmsg(char *thrname, char *data){
     FNAME();
+    if(!data || strlen(data) == 0) return ANS_WRONGMESG;
+    char *ptr = data, c = 0;
+    while(*ptr){ // check that message not empty
+        c = *ptr++;
+        if(c > ' ') break;
+    }
+    if(c <= ' ') return ANS_WRONGMESG;
     threadinfo *ti = findThreadByName(thrname);
     if(!ti) return ANS_NOTFOUND;
     if(!mesgAddText(&ti->commands, data)) return ANS_CANTSEND;
