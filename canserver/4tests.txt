@@ -11,10 +11,96 @@ register new 3333 emulation
 
 #stepper
 register x 0x58a stepper
+mesg x stop
+mesg x status
+mesg x info
+mesg x absmove 3200
+mesg x relmove 3200
+mesg x relmove -3200
+mesg x enable 0
 
 
+===================
+help
+help> help - show help
+help> list - list all threads
+help> mesg NAME MESG - send message `MESG` to thread `NAME`
+help> register NAME ID ROLE - register new thread with `NAME`, raw receiving `ID` running thread `ROLE`
+help> threads - list all possible threads with their message format
+help> unregister NAME - kill thread `NAME`
 
-#define getSDOe(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else ERRX(e);}while(0)
+register x 0x58a stepper
+OK
+x maxspeed=OK
 
-getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
+register y 0x58b stepper   
+OK
+y maxspeed=OK
+
+list
+thread> name='x' role='stepper' ID=0x58A
+thread> name='y' role='stepper' ID=0x58B
+thread> Send message 'help' to threads marked with (args) to get commands list
+
+threads
+role> canopen NodeID index subindex [data] - raw CANOpen commands with `index` and `subindex` to `NodeID`
+role> emulation (list) - stepper emulation
+role> raw ID [DATA] - raw CANbus commands to raw `ID` with `DATA`
+role> stepper (list) - simple stepper motor: no limit switches, only goto
+
+mesg x help
+OK
+x> COMMAND   NARGS   MEANING
+x> stop        0     stop motor and clear errors
+x> status      0     get current position and status
+x> relmove     1     relative move
+x> absmove     1     absolute move to position arg
+x> enable      1     enable (!0) or disable (0) motor
+x> setzero     0     set current position as zero
+x> maxspeed    1     set/get maxspeed (get: arg==0)
+x> info        0     get motor information
+
+mesg x info
+OK
+x errstatus=0
+x devstatus=0
+x curpos=0
+x enable=1
+x microsteps=32
+x extenable=0
+x maxspeed=3200
+x maxcurnt=600
+x gpioval=8191
+x rotdir=1
+x relsteps=0
+x abssteps=0
+
+mesg x absmove 3200
+OK
+x abssteps=OK
+mesg x status
+OK
+x devstatus=0
+x curpos=3200
+x errstatus=0
+
+mesg x relmove 1000
+OK
+x abortcode='0x8000022' error='Data cannot be transferred or stored to the application because of the present device state'
+x abortcode='0x8000022' error='Data cannot be transferred or stored to the application because of the present device state'
+
+второй:
+x> COMMAND   NARGS   MEANING
+x> stop        0     stop motor and clear errors
+x> status      0     get current position and status
+x> relmove     1     relative move
+x> absmove     1     absolute move to position arg
+x> enable      1     enable (!0) or disable (0) motor
+x> setzero     0     set current position as zero
+x> maxspeed    1     set/get maxspeed (get: arg==0)
+x> info        0     get motor information
+
+x abssteps=OK
+x rotdir=OK
+x relsteps=OK
 

@@ -34,6 +34,7 @@ typedef struct{
     char *pid;              // product id
     char *port;             // port to connect
     char *logfile;          // logfile name
+    int speed;              // CANbus speed
     int verb;               // increase logfile verbosity level
     int terminal;           // run as terminal
     int echo;               // echo user commands back

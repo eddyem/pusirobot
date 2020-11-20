@@ -31,6 +31,9 @@
 #include <unistd.h>     // usleep
 #include <usefull_macros.h>
 
+// command to show help
+#define HELPCMD     "help"
+
 static int CANspeed = 0; // default speed, if !=0 set it when connected
 
 // all messages are in format "ID [data]"
@@ -57,9 +60,9 @@ static void *simplestp(void *arg);
 // handlers for standard types
 thread_handler CANhandlers[] = {
     {"canopen", canopencmds, "NodeID index subindex [data] - raw CANOpen commands with `index` and `subindex` to `NodeID`"},
-    {"emulation", stpemulator, "(list) - stepper emulation"},
+    {"emulation", stpemulator, "(args) - stepper emulation"},
     {"raw", rawcommands, "ID [DATA] - raw CANbus commands to raw `ID` with `DATA`"},
-    {"stepper", simplestp, "(list) - simple stepper motor: no limit switches, only goto"},
+    {"stepper", simplestp, "(args) - simple stepper motor: no limit switches, only goto"},
     {NULL, NULL, NULL}
 };
 
@@ -71,33 +74,46 @@ thread_handler *get_handler(const char *name){
     return NULL;
 }
 
+// bad arguments number
+#define CMDPAR_ERR_BADNUMB      (-1)
+// command not found
+#define CMDPAR_ERR_NOTFOUND     (-2)
+// just show help
+#define CMDPAR_ERR_SHOWHELP     (-3)
+// clear errors
+#define CMDPAR_CLEARERR         (-4)
+
 /**
  * @brief cmdParser - parser of user's comands
  * @param cmdlist - NULL-terminated array with possible commands
- * @param cmd - user's command (default command `list` shows all names/descriptions)
- * @return index of command in `cmdlist` or -1 if something wrong or not found
+ * @param s       - user's command (default command HELPCMD shows all names/descriptions)
+ *      argument `s` will be broken to tokens
+ * @param thrname - thread name (for help message)
+ * @return index of command in `cmdlist`, or negative errcode
  */
-static int cmdParser(threadCmd *cmdlist, char *s){
+static int cmdParser(const threadCmd *cmdlist, char *s, const char *thrname){
     if(!cmdlist || !s) return -1;
     char *saveptr, *command;
     int idx = 0;
     command = strtok_r(s, " \t,;\r\n", &saveptr);
     if(!command) return -1;
-    if(strcmp(command, "list") == 0){ // just show help
+    if(strcmp(command, HELPCMD) == 0){ // just show help
         char buf[128];
+        snprintf(buf, 128, "%s> COMMAND   NARGS   MEANING", thrname);
+        mesgAddText(&ServerMessages, buf);
         while(cmdlist->name){
-            snprintf(buf, 128, "params> %s (%d arguments) - %s",
-                     cmdlist->name, cmdlist->nargs, cmdlist->descr);
+            snprintf(buf, 128, "%s> %-12s%-6d%s",
+                     thrname, cmdlist->name, cmdlist->nargs, cmdlist->descr);
             mesgAddText(&ServerMessages, buf);
             ++cmdlist;
         }
-        return 10000;
+        return CMDPAR_ERR_SHOWHELP;
     }
     while(cmdlist->name){
         if(strcmp(cmdlist->name, command) == 0) break;
         ++idx; ++cmdlist;
     }
-    if(!cmdlist->name) return -1; // command not found
+    if(!cmdlist->name) return CMDPAR_ERR_NOTFOUND; // command not found
     if(cmdlist->nargs == 0) return idx; // simple command
     int nargsplus1 = cmdlist->nargs + 1, N = 0;
     long *args = MALLOC(long, nargsplus1);
@@ -106,9 +122,13 @@ static int cmdParser(threadCmd *cmdlist, char *s){
         if(!nxt) break;
         if(str2long(nxt, &args[N])) break;
     }
+    if(!cmdlist->args){
+        WARNX("NULL instead of pointer to received data");
+        return CMDPAR_ERR_BADNUMB;
+    }
     if(N != cmdlist->nargs){
         FREE(args);
-        return -1; // bad arguments number
+        return CMDPAR_ERR_BADNUMB; // bad arguments number
     }
     for(int i = 0; i < N; ++i)
         cmdlist->args[i] = args[i];
@@ -198,10 +218,9 @@ void *CANserver(_U_ void *data){
             }
             FREE(msg);
         }
-        usleep(1000);
         CANmesg cm = {0};
-        if(!canbus_read(&cm)){ // got raw message from CAN bus - parce it
-            DBG("Got CAN message from %d, len: %d", cm.ID, cm.len);
+        if(!canbus_read(&cm)){ // got raw message from CAN bus - parse it
+            DBG("Got CAN message from 0x%03X, len: %d", cm.ID, cm.len);
             processCANmessage(&cm);
         }else if(canbus_disconnected()) reopen_device();
     }
@@ -363,6 +382,115 @@ static void chkSDO(const SDO *sdo, const char *thrname){
     mesgAddText(&ServerMessages, buf);
 }
 
+// parser of base stepper motor commands
+/**
+ * @brief baseStepperCommands - parser of base stepper motor commands
+ * @param cmd     - command message (don't brokes like in `cmdParser`)
+ * @param thrname - thread name
+ * @return 0 if found command (or it was erroneous), CMDPAR_ERR_NOTFOUND if not found,
+ *      CMDPAR_ERR_SHOWHELP if got 'help', CMDPAR_CLEARERR if got 'stop'
+ */
+static int baseStepperCommands(const char *cmd, const threadinfo *ti){
+    if(!cmd || !ti) return CMDPAR_ERR_NOTFOUND;
+    CANmesg can;
+    char buf[128];
+    int i;
+    long par;
+    int NID = ti->ID & NODEID_MASK; // node ID
+    char *mesg = strdup(cmd);
+    threadCmd commands[] = {
+        [0] = {"stop", 0, NULL, "stop motor and clear errors"},
+        [1] = {"status", 0, NULL, "get current position and status"},
+        [2] = {"relmove", 1, &par, "relative move"},
+        [3] = {"absmove", 1, &par, "absolute move to position arg"},
+        [4] = {"enable", 1, &par, "enable (!0) or disable (0) motor"},
+        [5] = {"setzero", 0, NULL, "set current position as zero"},
+        [6] = {"maxspeed", 1, &par, "set/get maxspeed (get: arg==0)"},
+        [7] = {"info", 0, NULL, "get motor information"},
+        {NULL, 0, NULL, NULL}
+    };
+    int idx = cmdParser(commands, mesg, ti->name);
+    DBG("idx = %d", idx);
+    if(idx < 0){
+        switch(idx){
+            case CMDPAR_ERR_BADNUMB:
+                snprintf(buf, 128, "%s bad arguments number for '%s'", ti->name, mesg);
+            break;
+            case CMDPAR_ERR_NOTFOUND:
+                FREE(mesg);
+                return CMDPAR_ERR_NOTFOUND;
+            break;
+            case CMDPAR_ERR_SHOWHELP: // do nothing
+                FREE(mesg);
+                return CMDPAR_ERR_SHOWHELP;
+            break;
+            default:
+                snprintf(buf, 128, "%s error in command '%s'", ti->name, mesg);
+        }
+        if(CMDPAR_ERR_SHOWHELP != idx){
+            mesgAddText(&ServerMessages, buf);
+            FREE(mesg);
+            return 0;
+        }
+    }
+    switch(idx){
+        case 0: // stop
+            CANBUSPUSH(SDO_write(&STOP, NID, 1, &can));
+            CANBUSPUSH(SDO_read(&DEVSTATUS, NID, &can));
+            CANBUSPUSH(SDO_read(&ERRSTATE, NID, &can));
+            return CMDPAR_CLEARERR;
+        break;
+        case 1: // status, curpos
+            CANBUSPUSH(SDO_read(&DEVSTATUS, NID, &can));
+            CANBUSPUSH(SDO_read(&POSITION, NID, &can));
+            CANBUSPUSH(SDO_read(&ERRSTATE, NID, &can));
+        break;
+        case 2: // relmove
+            i = 1; // positive direction
+            if(par < 0){
+                i = 0; // negative direction
+                par = -par;
+            }
+            CANBUSPUSH(SDO_write(&ROTDIR, NID, i, &can));
+            CANBUSPUSH(SDO_write(&RELSTEPS, NID, par, &can));
+        break;
+        case 3: // absmove
+            CANBUSPUSH(SDO_write(&ABSSTEPS, NID, par, &can));
+        break;
+        case 4: // enable
+            if(par) par = 1;
+            CANBUSPUSH(SDO_write(&ENABLE, NID, par, &can));
+        break;
+        case 5: // setzero
+            CANBUSPUSH(SDO_write(&POSITION, NID, 0, &can));
+        break;
+        case 6: // maxspeed
+            if(par) // set
+                CANBUSPUSH(SDO_write(&MAXSPEED, NID, par, &can));
+            else
+                CANBUSPUSH(SDO_read(&MAXSPEED, NID, &can));
+        break;
+        case 7: // info
+            CANBUSPUSH(SDO_read(&ERRSTATE, NID, &can));
+            CANBUSPUSH(SDO_read(&DEVSTATUS, NID, &can));
+            CANBUSPUSH(SDO_read(&POSITION, NID, &can));
+            CANBUSPUSH(SDO_read(&ENABLE, NID, &can));
+            CANBUSPUSH(SDO_read(&MICROSTEPS, NID, &can));
+            CANBUSPUSH(SDO_read(&EXTENABLE, NID, &can));
+            CANBUSPUSH(SDO_read(&MAXSPEED, NID, &can));
+            CANBUSPUSH(SDO_read(&MAXCURNT, NID, &can));
+            CANBUSPUSH(SDO_read(&GPIOVAL, NID, &can));
+            CANBUSPUSH(SDO_read(&ROTDIR, NID, &can));
+            CANBUSPUSH(SDO_read(&RELSTEPS, NID, &can));
+            CANBUSPUSH(SDO_read(&ABSSTEPS, NID, &can));
+        break;
+        default:
+        break;
+    }
+    FREE(mesg);
+    return 0;
+}
+
 /**
  * @brief simplestp - simplest stepper motor
  * @param arg - thread identifier
@@ -375,60 +503,46 @@ static void chkSDO(const SDO *sdo, const char *thrname){
  *      stop: stop motor
  */
 static void *simplestp(void *arg){
-    threadinfo _U_ *ti = (threadinfo*)arg;
+    threadinfo *ti = (threadinfo*)arg;
     CANmesg can;
-    char buf[128];
-    long parameters[2];
-    threadCmd commands[] = {
-        [0] = {"test", 2, parameters, "show test values"},
-        [1] = {"status", 0, NULL, "get current position and status"},
-        [2] = {"stop", 0, NULL, "stop motor"},
-        [3] = {"absmove", 1, parameters, "absolute move to position x"},
-        {NULL, 0, NULL, NULL}
-    };
     int NID = ti->ID & NODEID_MASK; // node ID
+    uint8_t clearerr = 0;
     // prepare all
     CANBUSPUSH(SDO_write(&MAXSPEED, NID, 3200, &can));
     while(1){
         char *mesg = mesgGetText(&ti->commands);
-        if(mesg) do{
+        if(mesg){
             DBG("Got command: %s", mesg);
-            int idx = cmdParser(commands, mesg);
-            DBG("idx = %d", idx);
-            if(-1 == idx){
-                snprintf(buf, 128, "%s wrong command '%s' or bad arguments number", ti->name, mesg);
-                mesgAddText(&ServerMessages, buf);
+            int b = baseStepperCommands(mesg, ti);
+            if(b){ // not found, 'help' or 'stop'
+                switch(b){
+                    case CMDPAR_ERR_NOTFOUND: // process own commands
+                    break;
+                    case CMDPAR_ERR_SHOWHELP: // show own help
+                    break;
+                    case CMDPAR_CLEARERR:
+                        clearerr = 1;
+                    break;
+                    default:
+                    break;
+                }
             }
-            switch(idx){
-                case 0:
-                    snprintf(buf, 128, "%s get test params: %ld, %ld", ti->name, parameters[0], parameters[1]);
-                    mesgAddText(&ServerMessages, buf);
-                break;
-                case 1: // status, curpos
-                    CANBUSPUSH(SDO_read(&DEVSTATUS, NID, &can));
-                    CANBUSPUSH(SDO_read(&POSITION, NID, &can));
-                    CANBUSPUSH(SDO_read(&ERRSTATE, NID, &can));
-                break;
-                case 2: // stop
-                    CANBUSPUSH(SDO_write(&STOP, NID, 1, &can));
-                break;
-                case 3: // absmove
-                    /*if(parameters[0] < 0){
-                        CANBUSPUSH(SDO_write(&RELSTEPS, NID, parameters[0], &can));
-                        parameters[0] = -parameters[0];
-                    }*/
-                    CANBUSPUSH(SDO_write(&ABSSTEPS, NID, parameters[0], &can));
-                break;
-                default:
-                break;
-            }
-            FREE(mesg);
-        }while(0);
+        }
         CANmesg *ans = (CANmesg*)mesgGetObj(&ti->answers, NULL);
         if(ans) do{
             SDO sdo;
             if(!parseSDO(ans, &sdo)) break;
             chkSDO(&sdo, ti->name);
+            if(clearerr){
+                if(sdo.index == ERRSTATE.index && sdo.subindex == ERRSTATE.subindex){
+                    CANBUSPUSH(SDO_write(&ERRSTATE, NID, sdo.data[0], &can));
+                    --clearerr;
+                }
+                if(sdo.index == DEVSTATUS.index && sdo.subindex == DEVSTATUS.subindex){
+                    CANBUSPUSH(SDO_write(&DEVSTATUS, NID, sdo.data[0], &can));
+                    --clearerr;
+                }
+            }
             FREE(ans);
         }while(0);
         usleep(1000);
@@ -440,10 +554,7 @@ static void *simplestp(void *arg){
 /**
  * @brief setCANspeed - set new speed of CANbus
  * @param speed - speed in kbaud
- * @return 0 if all OK
  */
-int setCANspeed(int speed){
-    if(canbus_setspeed(speed)) return 1;
+void setCANspeed(int speed){
     CANspeed = speed;
-    return 0;
 }

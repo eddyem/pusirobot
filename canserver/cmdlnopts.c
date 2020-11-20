@@ -64,6 +64,7 @@ myoption cmdlnopts[] = {
     {"echo",    NO_ARGS,    NULL,   'e',    arg_int,    APTR(&G.echo),      _("echo users commands back")},
     {"pidfile", NEED_ARG,   NULL,   0,      arg_string, APTR(&G.pidfile),   _("name of PID file (default: " DEFAULT_PIDFILE ")")},
     {"verbose", NO_ARGS,    NULL,   'v',    arg_none,   APTR(&G.verb),      _("increase verbosity level of log file (each -v increased by 1)")},
+    {"speed",   NEED_ARG,   NULL,   's',    arg_int,    APTR(&G.speed),     _("set CANbus speed")},
     end_option
 };
 

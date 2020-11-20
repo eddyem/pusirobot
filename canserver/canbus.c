@@ -90,7 +90,6 @@ static int read_ttyX(TTY_descr *d){
 
 // thread-safe writing, add trailing '\n'
 static int ttyWR(const char *buff, int len){
-    FNAME();
     if(disconnected) return 1;
     pthread_mutex_lock(&mutex);
     //canbus_clear();
@@ -168,7 +167,6 @@ int canbus_setspeed(int speed){
  * @return 0 if all OK
  */
 int canbus_write(CANmesg *mesg){
-    FNAME();
     if(disconnected) return 1;
     char buf[BUFLEN];
     if(!mesg || mesg->len > 8) return 1;

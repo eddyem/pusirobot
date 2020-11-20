@@ -40,7 +40,7 @@ static const char *listthr(_U_ char *par1, _U_ char *par2);
 static const char *regthr(char *thrname, char *data);
 static const char *unregthr(char *thrname, char *data);
 static const char *sendmsg(char *thrname, char *data);
-static const char *setspd(char *speed, _U_ char *data);
+//static const char *setspd(char *speed, _U_ char *data);
 
 /*
  * Commands format:
@@ -63,7 +63,7 @@ static cmditem functions[] = {
     {"list", listthr, "- list all threads"},
     {"mesg", sendmsg, "NAME MESG - send message `MESG` to thread `NAME`"},
     {"register", regthr, "NAME ID ROLE - register new thread with `NAME`, raw receiving `ID` running thread `ROLE`"},
-    {"speed", setspd, "SPD - set CANbus speed to `SPD`"},
+//    {"speed", setspd, "SPD - set CANbus speed to `SPD`"},
     {"threads", sthrds, "- list all possible threads with their message format"},
     {"unregister", unregthr, "NAME - kill thread `NAME`"},
     {NULL, NULL, NULL}
@@ -86,7 +86,7 @@ static const char *sthrds(_U_ char *par1, _U_ char *par2){
     char buf[128];
     thread_handler *h = CANhandlers;
     while(h->name){
-        snprintf(buf, 128, "thread> %s %s", h->name, h->helpmesg);
+        snprintf(buf, 128, "role> %s %s", h->name, h->helpmesg);
         mesgAddText(&ServerMessages, buf);
         ++h;
     }
@@ -106,7 +106,7 @@ static const char *listthr(_U_ char *par1, _U_ char *par2){
         mesgAddText(&ServerMessages, msg);
         empty = 0;
     }while(1);
-    mesgAddText(&ServerMessages, "thread> Send message 'list' to thread marked with (list) to get commands list");
+    mesgAddText(&ServerMessages, "thread> Send message 'help' to threads marked with (args) to get commands list");
     if(empty) return "No threads";
     return NULL;
 }
@@ -173,7 +173,7 @@ static const char *sendmsg(char *thrname, char *data){
     if(!mesgAddText(&ti->commands, data)) return ANS_CANTSEND;
     return ANS_OK;
 }
-
+/*
 static const char *setspd(char *speed, _U_ char *data){
     FNAME();
     long spd;
@@ -182,7 +182,7 @@ static const char *setspd(char *speed, _U_ char *data){
         return "Wrong speed";
     }
     return ANS_OK;
-}
+}*/
 
 /**
  * @brief processCommand - parse command received by socket

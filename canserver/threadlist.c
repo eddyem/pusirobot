@@ -127,7 +127,7 @@ threadinfo *findThreadByID(int ID){
  */
 void *mesgAddObj(message *msg, void *data, size_t size){
     if(!msg || !data || size == 0) return NULL;
-    DBG("Want to add mesg with length %zd", size);
+    //DBG("Want to add mesg with length %zd", size);
     if(pthread_mutex_lock(&msg->mutex)) return NULL;
     msglist *node = pushmessage(&msg->msg, data, size);
     if(!node){
@@ -146,7 +146,7 @@ void *mesgAddObj(message *msg, void *data, size_t size){
  */
 char *mesgAddText(message *msg, char *txt){
     if(!txt) return NULL;
-    DBG("mesgAddText(%s)", txt);
+    //DBG("mesgAddText(%s)", txt);
     size_t l = strlen(txt) + 1;
     return mesgAddObj(msg, (void*)txt, l);
 }

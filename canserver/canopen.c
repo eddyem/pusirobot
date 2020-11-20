@@ -96,6 +96,10 @@ static const abortcodes *abortcode_search(uint32_t abortcode){ //, int *n){
  */
 CANmesg *mkMesg(SDO *sdo, CANmesg *mesg){
     if(!sdo || !mesg) return NULL;
+    /*DBG("Got SDO NID=%d, idx=0x%x, subidx=%d, len=%d, data={%x %x %x %x}",
+        sdo->NID, sdo->index, sdo->subindex, sdo->datalen,
+        sdo->data[0], sdo->data[1], sdo->data[2], sdo->data[3]);*/
+    memset(mesg, 0, sizeof(CANmesg));
     mesg->ID = RSDO_COBID + sdo->NID;
     mesg->len = 8;
     memset(mesg->data, 0, 8);
@@ -107,6 +111,11 @@ CANmesg *mkMesg(SDO *sdo, CANmesg *mesg){
     mesg->data[1] = sdo->index & 0xff; // l
     mesg->data[2] = (sdo->index >> 8) & 0xff; // h
     mesg->data[3] = sdo->subindex;
+#if 0
+    DBG("MESG: ID=0x%X, data=", mesg->ID);
+    for(int x = 0; x < 8; ++x) fprintf(stderr, "0x%02X ", mesg->data[x]);
+    fprintf(stderr, "\n");
+#endif
     return mesg;
 }
 
@@ -136,19 +145,22 @@ SDO *parseSDO(const CANmesg *mesg, SDO *sdo){
     else if(sdo->ccs == CCS_ABORT_TRANSFER) sdo->datalen = 4; // error code
     else sdo->datalen = 0; // no data in message
     for(uint8_t i = 0; i < 4; ++i) sdo->data[i] = mesg->data[4+i];
-    DBG("Got TSDO from NID=%d, ccs=%u, index=0x%X, subindex=0x%X, datalen=%d",
-        sdo->NID, sdo->ccs, sdo->index, sdo->subindex, sdo->datalen);
+    DBG("Got TSDO from NID=%d, ccs=%u, index=0x%X, subindex=0x%X, datalen=%d, data=[%x %x %x %x]",
+        sdo->NID, sdo->ccs, sdo->index, sdo->subindex, sdo->datalen,
+        sdo->data[0], sdo->data[1], sdo->data[2], sdo->data[3]);
     return sdo;
 }
 
+#if 0
 // send request to read SDO
 static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
-    SDO sdo;
-    sdo.NID = NID;
-    sdo.ccs = CCS_INIT_UPLOAD;
-    sdo.datalen = 0;
-    sdo.index = idx;
-    sdo.subindex = subidx;
+    SDO sdo = {
+        .NID = NID,
+        .ccs = CCS_INIT_UPLOAD,
+        .datalen = 0,
+        .index = idx,
+        .subindex = subidx
+    };
     CANmesg mesg;
     return canbus_write(mkMesg(&sdo, &mesg));
 }
@@ -192,6 +204,7 @@ SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID, SDO *sdo){
     }
     return getSDOans(idx, subidx, NID, sdo);
 }
+#endif
 
 // mk... are all used
 static inline uint32_t mku32(const uint8_t data[4]){
@@ -282,10 +295,6 @@ CANmesg *SDO_read(const SDO_dic_entry *e, uint8_t NID, CANmesg *cm){
         .index = e->index,
         .subindex = e->subindex
     };
-    /*sdo.NID = NID;
-    sdo.ccs = CCS_INIT_UPLOAD;
-    sdo.index = e->index;
-    sdo.subindex = e->subindex;*/
     return mkMesg(&sdo, cm);
 }
 
@@ -303,12 +312,13 @@ CANmesg *SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data, CANmesg *c
     int32_t I;
     uint16_t U16;
     int16_t I16;
-    SDO sdo;
-    sdo.NID = NID;
-    sdo.ccs = CCS_INIT_DOWNLOAD;
-    sdo.datalen = e->datasize;
-    sdo.index = e->index;
-    sdo.subindex = e->subindex;
+    SDO sdo ={
+        .NID = NID,
+        .ccs = CCS_INIT_DOWNLOAD,
+        .datalen = e->datasize,
+        .index = e->index,
+        .subindex = e->subindex
+    };
     DBG("datalen=%d, signed=%d", e->datasize, e->issigned);
     if(e->issigned){
         switch(e->datasize){
@@ -349,6 +359,7 @@ CANmesg *SDO_write(const SDO_dic_entry *e, uint8_t NID, int64_t data, CANmesg *c
     return cm;
 }
 
+#if 0
 // write SDO data, return 0 if all OK
 int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     FNAME();
@@ -356,13 +367,14 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
         WARNX("SDO_write(): bad datalen");
         return 1;
     }
-    SDO sdo;
-    sdo.NID = NID;
-    sdo.ccs = CCS_INIT_DOWNLOAD;
-    sdo.datalen = e->datasize;
+    SDO sdo = {
+        .NID = NID,
+        .ccs = CCS_INIT_DOWNLOAD,
+        .datalen = e->datasize,
+        .index = e->index,
+        .subindex = e->subindex
+    };
     for(uint8_t i = 0; i < e->datasize; ++i) sdo.data[i] = data[i];
-    sdo.index = e->index;
-    sdo.subindex = e->subindex;
     CANmesg mesgp;
     mkMesg(&sdo, &mesgp);
     DBG("Canbus write..");
@@ -393,3 +405,4 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     }
     return 0;
 }
+#endif

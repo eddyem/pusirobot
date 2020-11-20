@@ -28,6 +28,7 @@
 #include "aux.h"
 #include "cmdlnopts.h"
 #include "socket.h"
+#include "processmotors.h"
 
 glob_pars *GP; // non-static: to use in outhern functions
 
@@ -56,6 +57,9 @@ int main(int argc, char **argv){
     char *dev = find_device();
     if(!dev) ERRX("Serial device not found!");
     FREE(dev);
+    if(!GP->speed) ERRX("Point CANbus speed");
+    if(GP->speed < 10 || GP->speed > 3000) ERRX("Wrong CANbus speed value: %d, shold be 10..3000", GP->speed);
+    setCANspeed(GP->speed);
     signal(SIGTERM, signals); // kill (-15) - quit
     signal(SIGHUP, SIG_IGN);  // hup - ignore
     signal(SIGINT, signals);  // ctrl+C - quit
