@@ -20,13 +20,13 @@
 
 #include "aux.h"
 
+#include <fcntl.h>
 #include <libudev.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <usefull_macros.h>
 
-static char *VID = NULL, *PID = NULL;
 // try to find serial device with given vid/pid/filepath
 // @return device filepath (allocated here!) or NULL if not found
 char *find_device(){
@@ -64,33 +64,29 @@ char *find_device(){
             udev_device_unref(dev);
             continue;
         }
-        int found = 0;
+        int found = FALSE;
         do{
-            // 1st try to check recently found VID/PID
-            int good = 0;
-            if(VID){ if(strcmp(VID, vid)) break; else ++good;}
-            if(PID){ if(strcmp(PID, pid)) break; else ++good;}
-            if(good == 2){
-                DBG("Use recently found VID/PID");
-                found = 1; break;
-            }
             // user give us VID and/or PID? Check them
             if(GP->vid){ if(strcmp(GP->vid, vid)) break;} // user give another vid
             if(GP->pid){ if(strcmp(GP->vid, vid)) break;} // user give another pid
             // now try to check by user given device name
             if(GP->device){
-                if(strcmp(GP->device, devpath) == 0) found = 1;
+                DBG("User gives device name: %s", GP->device);
+                if(strcmp(GP->device, devpath) == 0) found = TRUE;
                 break;
             }
             // still didn't found? OK, take the first comer!
             DBG("The first comer");
-            found = 1;
+            found = TRUE;
         }while(0);
         if(found){
-            FREE(VID); FREE(PID);
-            VID = strdup(vid); PID = strdup(pid);
-            path = strdup(devpath);
-            DBG("Found: VID=%s, PID=%s, path=%s", VID, PID, path);
+            if(open(devpath, O_RDWR) < 0){
+                WARN("open()");
+                found = FALSE;
+            }else{
+                path = strdup(devpath);
+                DBG("Found: VID=%s, PID=%s, path=%s", vid, pid, path);
+            }
         }
         /*printf("\tman: %s, prod: %s\n", udev_device_get_sysattr_value(dev,"manufacturer"),
                udev_device_get_sysattr_value(dev,"product"));
