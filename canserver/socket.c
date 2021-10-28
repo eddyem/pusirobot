@@ -104,7 +104,7 @@ static void *server(void *asock){
     }
     int nfd = 1;
     // max amount of opened fd (+1 for server socket)
-#define MAX_FDS (3)
+#define MAX_FDS (11)
     struct pollfd poll_set[MAX_FDS];
     memset(poll_set, 0, sizeof(poll_set));
     poll_set[0].fd = sock;

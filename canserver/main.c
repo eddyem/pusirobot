@@ -31,11 +31,14 @@
 #include "processmotors.h"
 
 glob_pars *GP; // non-static: to use in outhern functions
+static pid_t childpid;
 
 void signals(int signo){
     //restore_tty();
-    unlink(GP->pidfile);
-    LOGERR("Exit with status %d", signo);
+    if(childpid){ // unlink PID-file only from father
+        unlink(GP->pidfile);
+        LOGERR("Exit with status %d", signo);
+    }
     exit(signo);
 }
 
@@ -81,7 +84,7 @@ int main(int argc, char **argv){
     check4running(self, GP->pidfile);
     FREE(self);
     while(1){ // guard for dead processes
-        pid_t childpid = fork();
+        childpid = fork();
         if(childpid){
             LOGDBG("Create child with PID %d", childpid);
             DBG("Created child with PID %d\n", childpid);
