@@ -28,15 +28,15 @@
 #include "cmdlnopts.h"
 #include "dataparser.h"
 #include "pusirobot.h"
+#include "verblog.h"
 
 static glob_pars *GP = NULL;  // for GP->pidfile need in `signals`
 static uint8_t ID = 0;
-static uint16_t microstepping = 0;
 static uint8_t devstat = 0; // device status after chkstat()
 
 // default signal handler
 void signals(int sig){
-    putlog("Exit with status %d", sig);
+    LOGERR("Exit with status %d", sig);
     DBG("Exit with status %d", sig);
     if(GP->pidfile) // remove unnesessary PID file
         unlink(GP->pidfile);
@@ -66,7 +66,7 @@ static inline void chkerr(int64_t es){
 // device status check
 static inline void chkstat(int64_t es){
     if(es) red("DEVSTATUS=%d\n", (int)es);
-    else green("DEVSTATUS=0\n");
+    else message(1, "DEVSTATUS=0");
     devstat = (uint8_t)es;
     if(devstat){
         for(uint8_t i = 0; i < 8; ++i){
@@ -80,6 +80,7 @@ static inline void chkstat(int64_t es){
     }
 }
 
+/*
 // setup microstepping
 static inline void setusteps(int64_t es){
     DBG("es=%zd", es);
@@ -94,7 +95,7 @@ static inline void setusteps(int64_t es){
     }
     microstepping = es > 0 ? (uint16_t) es : 1;
     green("MICROSTEPPING=%u\n", microstepping);
-}
+}*/
 
 // setup maximal speed
 static inline void setmaxspd(int64_t es){
@@ -102,14 +103,14 @@ static inline void setmaxspd(int64_t es){
     if(es == 0 && (GP->absmove != INT_MIN || GP->relmove != INT_MIN) && (GP->maxspeed == INT_MIN || GP->maxspeed == 0))
         ERRX("Can't move when MAXSPEED==0");
     if(GP->maxspeed != INT_MIN){
-        GP->maxspeed *= microstepping;
-        if(GP->maxspeed < MAX_SPEED_MIN || GP->maxspeed > MAX_SPEED_MAX)
-            ERRX("MAXSPEED should be from %d to %d", MAX_SPEED_MIN/microstepping, MAX_SPEED_MAX/microstepping);
+        GP->maxspeed *= SPEED_MULTIPLIER;
+        if(GP->maxspeed < MAX_SPEED_MIN|| GP->maxspeed > MAX_SPEED_MAX)
+            ERRX("MAXSPEED should be from %d to %d", MAX_SPEED_MIN / SPEED_MULTIPLIER, MAX_SPEED_MAX / SPEED_MULTIPLIER);
         DBG("Try to change max speed");
         if(SDO_write(&MAXSPEED, ID, GP->maxspeed) || INT64_MIN == (es = SDO_read(&MAXSPEED, ID)))
             ERRX("Can't change max speed");
     }
-    if(es) green("MAXSPEED=%d\n", (int)es/microstepping);
+    if(es) message(1, "MAXSPEED=%d", (int)es);
     else red("MAXSPEED=0\n");
 }
 
@@ -172,17 +173,17 @@ int main(int argc, char *argv[]){
     initial_setup();
     char *self = strdup(argv[0]);
     GP = parse_args(argc, argv);
+    if(GP->verblevel) maxmesglevl(GP->verblevel);
     if(GP->checkfile){ // just check and exit
-        return parse_data_file(GP->checkfile, 0);
+        char **c = GP->checkfile;
+        int r = 0;
+        while(*c){
+            message(1, "\nCheck data file %s", *c);
+            r += parse_data_file(*c, 0);
+            ++c;
+        }
+        return r;
     }
-    check4running(self, GP->pidfile);
-    free(self);
-    signal(SIGTERM, signals); // kill (-15) - quit
-    signal(SIGHUP, SIG_IGN);  // hup - ignore
-    signal(SIGINT, signals);  // ctrl+C - quit
-    signal(SIGQUIT, signals); // ctrl+\ - quit
-    signal(SIGTSTP, SIG_IGN); // ignore ctrl+Z
-
     if(GP->NodeID != 1){
         if(GP->NodeID < 1 || GP->NodeID > 127) ERRX("Node ID should be a number from 1 to 127");
     }
@@ -195,45 +196,55 @@ int main(int argc, char *argv[]){
         if(GP->maxspeed == 0)
             ERRX("Set non-zero MAXSPEED");
     }
+    if(GP->enableESW && GP->disableESW) ERRX("Enable & disable ESW can't meet together");
 
-    if(GP->logfile) openlogfile(GP->logfile);
-    putlog(("Start application..."));
-    putlog("Try to open CAN bus device %s", GP->device);
+    check4running(self, GP->pidfile);
+    free(self);
+    signal(SIGTERM, signals); // kill (-15) - quit
+    signal(SIGHUP, SIG_IGN);  // hup - ignore
+    signal(SIGINT, signals);  // ctrl+C - quit
+    signal(SIGQUIT, signals); // ctrl+\ - quit
+    signal(SIGTSTP, SIG_IGN); // ignore ctrl+Z
+
+    if(GP->logfile){
+        sl_loglevel l = LOGLVL + GP->verblevel;
+        if(l > LOGLEVEL_ANY) l = LOGLEVEL_ANY;
+        OPENLOG(GP->logfile, l, 1);
+        LOGMSG(("Start application..."));
+        LOGMSG("Try to open CAN bus device %s", GP->device);
+    }
     setserialspeed(GP->serialspeed);
     if(canbus_open(GP->device)){
-        putlog("Can't open %s @ speed %d. Exit.", GP->device, GP->serialspeed);
-        ERRX("Can't open %s @ speed %d. Exit.", GP->device, GP->serialspeed);
+        LogAndErr("Can't open %s @ speed %d. Exit.", GP->device, GP->serialspeed);
     }
     if(canbus_setspeed(GP->canspeed)){
-        putlog("Can't set CAN speed %d. Exit.", GP->canspeed);
-        ERRX("Can't set CAN speed %d. Exit.", GP->canspeed);
+        LogAndErr("Can't set CAN speed %d. Exit.", GP->canspeed);
     }
 
     // print current position and state
     int64_t i64;
     ID = GP->NodeID;
-#define getSDOe(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else ERRX(e);}while(0)
-#define getSDOw(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else WARNX(e);}while(0)
+#define getSDOe(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else LogAndWarn(e); }while(0)
+#define getSDOw(SDO, fn, e)  do{if(INT64_MIN != (i64 = SDO_read(&SDO, ID))) fn(i64); else LogAndErr(e); }while(0)
 
 #define Mesg(...)
 //#define Mesg(...)    green(__VA_ARGS__)
 //double d0 = dtime();
 
     // get mircostepping (need this to properly calculate current position and move
-    if(GP->fracsteps) microstepping = 1; // Don't calculate microstepping in this case
-    else{
+    /*if(!GP->fracsteps){
         getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
         Mesg("MICROSTEPS: %g\n", dtime() - d0);
-    }
+    }*/
     if(!GP->quick){
         // check error status
         getSDOe(ERRSTATE, chkerr, "Can't get error status");
         Mesg("ERRSTATE: %g\n", dtime() - d0);
         // get current position
         if(INT64_MIN != (i64 = SDO_read(&POSITION, ID))){
-            int enc = (int)i64;
-            green("CURENCODER=%d\n", enc);
-            green("CURSTEPS=%.2f\n", enc / ((double)microstepping));
+            //int enc = (int)i64;
+            message(1, "CURENCODER=%d", i64);
+            //message(1, "CURSTEPS=%.2f", i64 / ((double)microstepping));
         }
         else WARNX("Can't read current position");
         Mesg("CURPOS: %g\n", dtime() - d0);
@@ -242,14 +253,20 @@ int main(int argc, char *argv[]){
         Mesg("GPIOVAL: %g\n", dtime() - d0);
         // get motor power status
         if(INT64_MIN != (i64 = SDO_read(&ENABLE, ID))){
-            if(i64) green("ENABLE=1\n");
-            else red("ENABLE=0\n");
+            if(i64) message(1, "ENABLE=1");
+            else message(1, "ENABLE=0");
             Mesg("Status: %g\n", dtime() - d0);
         }
         // get max speed
         getSDOe(MAXSPEED, setmaxspd, "Can't read max speed");
         Mesg("MAXSPEED: %g\n", dtime() - d0);
+        i64 = SDO_read(&MICROSTEPS, ID);
+        if(i64 == INT64_MIN) LogAndWarn("Can't get microstepping value");
+        else message(2, "MICROSTEPS=%u", i64);
     }
+    i64 = SDO_read(&ENCRESOL, ID);
+    if(i64 == INT64_MIN) LogAndWarn("Can't get encoder resolution value");
+    else message(2, "ENCRESOL=%u", 1 << i64);
     if(GP->absmove != INT_MIN || GP->relmove != INT_MIN || !GP->quick || GP->wait){
         // check device status
         getSDOe(DEVSTATUS, chkstat, "Can't get device status");
@@ -279,9 +296,13 @@ int main(int argc, char *argv[]){
     }
     // send values from external configuration file
     if(GP->parsefile){
-        green("Try to parse %s and send SDOs to device\n", GP->parsefile);
-        parse_data_file(GP->parsefile, GP->NodeID);
-        Mesg("parse_data_file: %g\n", dtime() - d0);
+        char **p = GP->parsefile;
+        while(*p){
+            message(1, "Try to parse %s and send SDOs to device", *p);
+            parse_data_file(*p, GP->NodeID);
+            Mesg("parse_data_file: %g\n", dtime() - d0);
+            ++p;
+        }
     }
     // enable limit switches
     if(GP->enableESW){
@@ -300,12 +321,11 @@ int main(int argc, char *argv[]){
     }
     //int64_t es = SDO_read(&EXTENABLE, ID);
     //green("LIMITSW=%lld\n", es);
-    int multiplier = GP->fracsteps ? 1 : microstepping;
     // move to absolute position
     if(GP->absmove != INT_MIN){
         if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
         SDO_write(&ENABLE, ID, 1);
-        if(SDO_write(&ABSSTEPS, ID, GP->absmove * multiplier))
+        if(SDO_write(&ABSSTEPS, ID, GP->absmove))
             ERRX("Can't move to absolute position %d", GP->absmove);
     }
     if(GP->relmove != INT_MIN && GP->relmove){
@@ -318,8 +338,7 @@ int main(int argc, char *argv[]){
         }
         if(SDO_write(&ROTDIR, ID, dir) || INT64_MIN == (i64 = SDO_read(&ROTDIR, ID)))
             ERRX("Can't change rotation direction");
-        DBG("i64=%ld, dir=%d", i64, dir);
-        if(SDO_write(&RELSTEPS, ID, GP->relmove * multiplier))
+        if(SDO_write(&RELSTEPS, ID, GP->relmove))
             ERRX("Can't move to relative position %d", GP->relmove);
         Mesg("RelMove: %g\n", dtime() - d0);
     }

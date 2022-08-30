@@ -35,13 +35,14 @@ typedef struct{
     char *device;           // serial device name
     char *pidfile;          // name of PID file
     char *logfile;          // logging to this file
-    char *parsefile;        // file to parse
-    char *checkfile;        // SDO data filename to check
+    char **parsefile;       // file[s] to parse
+    char **checkfile;       // SDO data filename[s] to check
+    int verblevel;          // verbose level for logfile
     int canspeed;           // CAN bus speed
     int serialspeed;        // serial device speed (CAN-bus to USB)
     int NodeID;             // node ID to work with
-    int absmove;            // absolute position to move
-    int relmove;            // relative position to move
+    int absmove;            // absolute position to move (in encoder's ticks)
+    int relmove;            // relative position to move (in encoder's ticks)
     int microsteps;         // set microstepping
     int maxspeed;           // max speed
     int stop;               // stop motor
@@ -53,7 +54,6 @@ typedef struct{
     int disableESW;         // --//-- disable
     int wait;               // wait while device is busy
     int quick;              // directly send command without getting status
-    int fracsteps;          // move in steps fractions instead of full steps
 } glob_pars;
 
 

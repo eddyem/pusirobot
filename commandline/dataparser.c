@@ -16,14 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "canopen.h"
-#include "dataparser.h"
-#include "pusirobot.h"
-
 #include <libgen.h> // basename
 #include <stdio.h>  // fopen
 #include <string.h> // strchr
 #include <usefull_macros.h>
+
+#include "canopen.h"
+#include "dataparser.h"
+#include "pusirobot.h"
+#include "verblog.h"
 
 #define BUFSZ 256
 
@@ -101,7 +102,7 @@ int parse_data_file(const char *fname, uint8_t nid){
             }
             data = (int64_t) l;
             DBG("Got: idx=0x%04X, subidx=0x%02X, data=0x%lX", idx, sidx, data);
-            if(nid == 0) printf("line #%d: read SDO with index=0x%04X, subindex=0x%02X, data=0x%lX (dec: %ld)\n", lineno, idx, sidx, data, data);
+            if(nid == 0) message(1, "line #%d: read SDO with index=0x%04X, subindex=0x%02X, data=0x%lX (dec: %ld)", lineno, idx, sidx, data, data);
             SDO_dic_entry *entry = dictentry_search(idx, sidx);
             if(!entry){
                 WARNX("SDO 0x%04X/0x%02X isn't in dictionary", idx, sidx);
@@ -127,7 +128,7 @@ int parse_data_file(const char *fname, uint8_t nid){
             }
             if(nid){
                 if(SDO_write(entry, nid, data)) WARNX("Can't write SDO idx=0x%04X", entry->index);
-                else printf("Send to NID=%d SDO [0x%04X, 0x%02X] with data 0x%lX\n", nid, entry->index, entry->subindex, data);
+                else message(1, "Send to NID=%d SDO [0x%04X, 0x%02X] with data 0x%lX", nid, entry->index, entry->subindex, data);
             }
         }while(0);
         if(!isgood){

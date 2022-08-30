@@ -144,7 +144,7 @@ SDO *parseSDO(CANmesg *mesg){
     return &sdo;
 }
 
-// send request to read SDO
+// send request to read SDO, return 0 if all OK
 static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
     SDO sdo;
     sdo.NID = NID;
@@ -153,7 +153,10 @@ static int ask2read(uint16_t idx, uint8_t subidx, uint8_t NID){
     sdo.index = idx;
     sdo.subindex = subidx;
     CANmesg *mesg = mkMesg(&sdo);
-    return canbus_write(mesg);
+    int ans = 1; //  error
+    for(int i = 0; i < NTRIES; ++i)
+        if(!(ans = canbus_write(mesg))) return 0;
+    return ans;
 }
 
 static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
@@ -277,7 +280,10 @@ int SDO_writeArr(const SDO_dic_entry *e, uint8_t NID, const uint8_t *data){
     sdo.subindex = e->subindex;
     CANmesg *mesgp = mkMesg(&sdo);
     DBG("Canbus write..");
-    if(canbus_write(mesgp)){
+    int ans = 1;
+    for(int i = 0; i < NTRIES; ++i)
+        if(!(ans = canbus_write(mesgp))) break;
+    if(ans){
         WARNX("SDO_write(): Can't initiate download");
         return 2;
     }

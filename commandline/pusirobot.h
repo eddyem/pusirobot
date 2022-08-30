@@ -39,8 +39,11 @@ typedef struct{
 extern const int DEsz;
 extern const SDO_dic_entry* allrecords[];
 
+// speed limits
 #define MAX_SPEED_MIN   -200000
 #define MAX_SPEED_MAX   200000
+// encoder ticks per rev * SPEED_MULTIPLIER = speed for 1 rev per second
+#define SPEED_MULTIPLIER    (1.6)
 
 // limit switches mask in GPIO status register (x=1,2,3)
 #define EXTMASK(x)      (1<<(6+x))

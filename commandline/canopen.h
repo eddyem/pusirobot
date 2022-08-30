@@ -24,7 +24,9 @@
 #include "pusirobot.h"
 
 // timeout for answer from the SDO, seconds
-#define SDO_ANS_TIMEOUT     (1.)
+#define SDO_ANS_TIMEOUT     (2.5)
+// N tries to write CAN message
+#define NTRIES              (15)
 
 // COB-ID base:
 #define NMT_COBID           0
