@@ -1,0 +1,43 @@
+#!/bin/bash
+
+CANID=11
+STPPERROT=6400
+# positions: amount of steps for each turret position
+POSITIONS=(4224   5291   6357   7424   8491   9557)
+
+function onlim(){
+    eval $(steppermove -I11 -E3 | grep LIM1)
+    echo $LIM1
+}
+
+if [[ $# != 1 ]]; then
+	echo -e "Usage: $(basename $0) position\n\twhere 'position' is a number from 0 to 5\t0 is closed diaphragm" >&2
+	exit 1
+fi
+
+if (( $1 > 5 || $1 < 0 )); then
+	echo "'position' should be from 0 (closed) to 5" >&2
+	exit 1
+fi
+
+steppermove -I${CANID} -m400
+if [[ $(onlim) == 1 ]]; then
+    echo "Go out from limit switch"
+    steppermove -I${CANID} -cA
+    steppermove -I${CANID} -m1000 -r $((STPPERROT / 4)) -w
+    steppermove -I${CANID} -m400
+    if (( $(onlim) == 1 )); then
+        echo "ROTATOR is on limit switch, rotate it first!" >&2
+        exit 1
+    fi
+fi
+
+echo "Go to limit switch"
+steppermove -I${CANID} -E3 -r $STPPERROT -w
+steppermove -I${CANID} -cA -w
+
+echo "Go to position  $1"
+steppermove -I${CANID} -r ${POSITIONS[$1]} -w
+
+echo "OK, at place!"
+steppermove -I${CANID} -E3

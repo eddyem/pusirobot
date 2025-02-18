@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# random move 3-point local corrector around middle point
+
+function rmove(){ # $1 - current motor index, $2 - index of motor to correct into+, $3 - relative steps
+	arr=(2 10 11) # ID's of motors
+	ID=${arr[$1]}
+	#./steppermove -I$ID -w
+	if [[ $1 -ne $2 ]]; then # move to minus
+		./steppermove -I$ID -a $(( 7200 - S ))
+	else # move to plus
+		./steppermove -I$ID -a $(( 7200 + S ))
+	fi
+}
+
+trap "echo Exited!; exit;" SIGINT SIGTERM
+
+while true; do
+	I=$(( RANDOM % 3 ))
+	S=$(( RANDOM % 1280 ))
+	for i in 0 1 2; do
+		rmove $i $I $S
+	done
+done

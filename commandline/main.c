@@ -123,7 +123,7 @@ static inline void gpioval(int64_t es){
     }
     for(int i = 1; i < 4; ++i){
         if(0 == (es & 1<<(i-1))) continue; // endswitch disabled
-        if(EXTACTIVE(i, v)) red("LIM%d=1\n", i);
+        printf("LIM%d=%d\n", i, (EXTACTIVE(i, v)));
     }
 }
 
@@ -138,8 +138,8 @@ static inline void showAllPars(){
                   entry->index, entry->subindex, entry->name);
             continue;
         }
-        printf("# %s\n0x%04X, %d, %ld (0x%lX)\n", entry->name, entry->index,
-               entry->subindex, val, val);
+        printf("# %s\n0x%04X, %d, %ld (0x%X)\n", entry->name, entry->index,
+               entry->subindex, val, (uint32_t)val);
         fflush(stdout);
     }
     printf("\n\n");
@@ -171,7 +171,6 @@ static inline void wait_busy(){
 
 int main(int argc, char *argv[]){
     initial_setup();
-    char *self = strdup(argv[0]);
     GP = parse_args(argc, argv);
     if(GP->verblevel) maxmesglevl(GP->verblevel);
     if(GP->checkfile){ // just check and exit
@@ -198,8 +197,7 @@ int main(int argc, char *argv[]){
     }
     if(GP->enableESW && GP->disableESW) ERRX("Enable & disable ESW can't meet together");
 
-    check4running(self, GP->pidfile);
-    free(self);
+    check4running(NULL, GP->pidfile);
     signal(SIGTERM, signals); // kill (-15) - quit
     signal(SIGHUP, SIG_IGN);  // hup - ignore
     signal(SIGINT, signals);  // ctrl+C - quit
@@ -236,6 +234,23 @@ int main(int argc, char *argv[]){
         getSDOe(MICROSTEPS, setusteps, "Can't get microstepping");
         Mesg("MICROSTEPS: %g\n", dtime() - d0);
     }*/
+    // enable limit switches
+    if(GP->enableESW){
+        if(SDO_write(&EXTENABLE, ID, GP->enableESW)){
+            WARNX("Error when trying to enable limit switches");
+            if(GP->absmove || GP->relmove) signals(-1);
+        }
+        Mesg("EXTENABLE: %g\n", dtime() - d0);
+    }
+    // disable limit switches
+    if(GP->disableESW){
+        if(SDO_write(&EXTENABLE, ID, 0)){
+            WARNX("Error when trying to disable limit switches");
+            if(GP->absmove || GP->relmove) signals(-1);
+        }
+    }
+    //int64_t es = SDO_read(&EXTENABLE, ID);
+    //green("LIMITSW=%lld\n", es);
     if(!GP->quick){
         // check error status
         getSDOe(ERRSTATE, chkerr, "Can't get error status");
@@ -265,7 +280,7 @@ int main(int argc, char *argv[]){
         else message(2, "MICROSTEPS=%u", i64);
     }
     i64 = SDO_read(&ENCRESOL, ID);
-    if(i64 == INT64_MIN) LogAndWarn("Can't get encoder resolution value");
+    if(i64 == INT64_MIN){ /* LogAndWarn("Can't get encoder resolution value"); */}
     else message(2, "ENCRESOL=%u", 1 << i64);
     if(GP->absmove != INT_MIN || GP->relmove != INT_MIN || !GP->quick || GP->wait){
         // check device status
@@ -304,24 +319,6 @@ int main(int argc, char *argv[]){
             ++p;
         }
     }
-    // enable limit switches
-    if(GP->enableESW){
-        if(SDO_write(&EXTENABLE, ID, GP->enableESW)){
-            WARNX("Error when trying to enable limit switches");
-            if(GP->absmove || GP->relmove) signals(-1);
-        }
-        Mesg("EXTENABLE: %g\n", dtime() - d0);
-    }
-    // disable limit switches
-    if(GP->disableESW){
-        if(SDO_write(&EXTENABLE, ID, 0)){
-            WARNX("Error when trying to disable limit switches");
-            if(GP->absmove || GP->relmove) signals(-1);
-        }
-    }
-    //int64_t es = SDO_read(&EXTENABLE, ID);
-    //green("LIMITSW=%lld\n", es);
-    // move to absolute position
     if(GP->absmove != INT_MIN){
         if(devstat == BUSY_STATE) ERRX("Can't move in BUSY state");
         SDO_write(&ENABLE, ID, 1);
@@ -342,6 +339,7 @@ int main(int argc, char *argv[]){
             ERRX("Can't move to relative position %d", GP->relmove);
         Mesg("RelMove: %g\n", dtime() - d0);
     }
+    if(GP->wait) wait_busy();
 #undef getSDOe
 
 #if 0

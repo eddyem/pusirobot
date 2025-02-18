@@ -1,0 +1,32 @@
+scripts for two-direction turret
+
+lambda/4
+rotates in negative direction
+speed=400
+full circle = 400 steps (12800 microsteps for 1/32)
+35.(5) microsteps per 1 degree
+
+turrret
+rotates in positive direction
+speed=1000
+full circle = 200 steps (6400 mircosteps for 1/32)
+six positions, so distance between positions is 1066.(6) microsteps
+
+
+scripts:
+
+Tinit - init stepper driver (run just after power on)
+Tgotopos - move turret to given position (0..5)
+Rgotoangle - rotate rotator to given angle (0..359 degrees)
+
+WARNING! If LIM1=1 (i.e. one of limit switches active) but lsw activated by other device than you want move,
+you won't be able to move it!
+
+So, if you need to move turret to some position when rotator is at 0 angle, you should first remove rotator from
+limit switch (at least to 30 degrees), then rotate turret and after all move rotator to given angle.
+The same is for turret position 2: it always on LIM1, so to move rotator when turret is on 2 you should move
+turret to any other position first, after that you will be able to rotate rotator
+
+To check just run 
+steppermove -vvvw -E3 -I11
+(twice, if first run won't show you limit switches), and you will see value of LIM1.

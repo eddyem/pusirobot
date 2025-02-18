@@ -103,6 +103,8 @@ DICENTRY(POSITION,      0x600C, 0, 4, 1, "current position")
 DICENTRY(CURRREDUCT,    0x600D, 0, 1, 0, "current reduction")
 // motor enable
 DICENTRY(ENABLE,        0x600E, 0, 1, 0, "motor enable")
+// EXT emergency stop Npar
+DICENTRY(EXTNPAR,       0x600F, 0, 1, 0, "EXT emergency stop number of parameters")
 // EXT emergency stop enable
 DICENTRY(EXTENABLE,     0x600F, 1, 1, 0, "EXT emergency stop enable")
 // EXT emergency stop trigger mode
@@ -120,6 +122,8 @@ DICENTRY(STALLPARS,     0x6017, 0, 2, 0, "stall parameters (open loop)")
 // offline operation
 DICENTRY(OFFLNMBR,      0x6018, 1, 1, 0, "Number of offline programming command")
 DICENTRY(OFFLENBL,      0x6018, 2, 1, 0, "Offline automatic operation enable")
+// EXT stabilize delay
+DICENTRY(EXTSTABDELAY,  0x601A, 0, 2, 0, "EXT stabilize delay (ms)")
 // stall set
 DICENTRY(STALLSET,      0x601B, 0, 1, 0, "stall set (open loop)")
 // absolute displacement

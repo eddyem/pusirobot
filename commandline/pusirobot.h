@@ -46,7 +46,7 @@ extern const SDO_dic_entry* allrecords[];
 #define SPEED_MULTIPLIER    (1.6)
 
 // limit switches mask in GPIO status register (x=1,2,3)
-#define EXTMASK(x)      (1<<(6+x))
+#define EXTMASK(x)      (1<<(7+x))
 
 #define EXTACTIVE(x, reg)   ((reg&EXTMASK(x)) ? 1:0)
 

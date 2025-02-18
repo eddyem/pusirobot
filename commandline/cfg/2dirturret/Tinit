@@ -1,0 +1,5 @@
+#!/bin/sh
+
+CANID=11
+
+steppermove -vvv -I${CANID} -cE3 -s250 -m400 -w

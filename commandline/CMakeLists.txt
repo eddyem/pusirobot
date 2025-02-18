@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.0)
 set(PROJ steppermove)
-set(MINOR_VERSION "1")
+set(MINOR_VERSION "2")
 set(MID_VERSION "0")
 set(MAJOR_VERSION "0")
 set(VERSION "${MAJOR_VERSION}.${MID_VERSION}.${MINOR_VERSION}")
 
-project(${PROJ} VERSION ${PROJ_VERSION} LANGUAGES C)
+project(${PROJ} VERSION ${VERSION} LANGUAGES C)
 #enable_language(C)
 
 message("VER: ${VERSION}")

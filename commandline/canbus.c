@@ -98,6 +98,7 @@ static int ttyWR(const char *buff, int len){
     int w = write_tty(dev->comfd, buff, (size_t)len);
     if(!w) w = write_tty(dev->comfd, "\n", 1);
     DBG("Written, dt=%g", dtime() - t0);
+    /*
     int errctr = 0;
     while(1){
         char *s = read_string(); // clear echo & check
@@ -108,7 +109,7 @@ static int ttyWR(const char *buff, int len){
                 break;
             }
         }else break;
-    }
+    }*/
     pthread_mutex_unlock(&mutex);
     DBG("Success, dt=%g", dtime() - t0);
     return w;
@@ -206,7 +207,7 @@ static char *read_string(){
             memcpy(ptr, dev->buf, dev->buflen);
             r += l; LL -= l; ptr += l;
             if(ptr[-1] == '\n'){
-                //DBG("Newline detected");
+                DBG("Newline detected");
                 break;
             }
             d0 = dtime();
@@ -218,6 +219,7 @@ static char *read_string(){
         if(optr){
             *optr = 0;
             ++optr;
+            if(*optr) DBG("optr=%s", optr);
         }else{
             WARNX("read_string(): no newline found");
             DBG("buf: %s", buf);

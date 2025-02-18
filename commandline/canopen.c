@@ -164,17 +164,21 @@ static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
     CANmesg mesg;
     SDO *sdo = NULL;
     double t0 = dtime();
-    while(dtime() - t0 < SDO_ANS_TIMEOUT){
+    while(dtime() - t0 < T_POLLING_TMOUT){
         mesg.ID = TSDO_COBID | NID; // read only from given ID
         if(canbus_read(&mesg)){
+            DBG("NO CAN data");
             continue;
         }
         sdo = parseSDO(&mesg);
-        if(!sdo) continue;
+        if(!sdo){
+            DBG("Not SDO");
+            continue;
+        }
         if(sdo->index == idx && sdo->subindex == subidx) break;
     }
     if(!sdo || sdo->index != idx || sdo->subindex != subidx){
-        WARNX("No answer from SDO 0x%X/0x%X", idx, subidx);
+        DBG("No answer from SDO 0x%X/0x%X", idx, subidx);
         return NULL;
     }
     return sdo;
@@ -189,11 +193,18 @@ static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
  */
 SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID){
     FNAME();
-    if(ask2read(idx, subidx, NID)){
-        WARNX("readSDOvalue(): Can't initiate upload");
-        return NULL;
+    double t0 = dtime();
+    SDO *sdo = NULL;
+    for(int i = 0; i < NTRIES && dtime() - t0 < SDO_ANS_TIMEOUT; ++i){
+        DBG("Try %d ...", i);
+        if(ask2read(idx, subidx, NID)){
+            DBG("Can't initiate upload");
+            continue;
+        }
+        if((sdo = getSDOans(idx, subidx, NID))) break;
+        DBG("got no answer");
     }
-    return getSDOans(idx, subidx, NID);
+    return sdo;
 }
 
 static inline uint32_t mku32(uint8_t data[4]){
@@ -228,10 +239,12 @@ int64_t SDO_read(const SDO_dic_entry *e, uint8_t NID){
         return INT64_MIN;
     }
     if(sdo->ccs == CCS_ABORT_TRANSFER){ // error
-        WARNX("Got error for SDO 0x%X", e->index);
         uint32_t ac = mku32(sdo->data);
-        const char *etxt = abortcode_text(ac);
-        if(etxt) WARNX("Abort code 0x%X: %s", ac, etxt);
+        if(ac != 0x06020000){ // don't warn for unexistant objects
+            WARNX("Got error for SDO 0x%X", e->index);
+            const char *etxt = abortcode_text(ac);
+            if(etxt) WARNX("Abort code 0x%X: %s", ac, etxt);
+        }
         return INT64_MIN;
     }
     if(sdo->datalen != e->datasize){

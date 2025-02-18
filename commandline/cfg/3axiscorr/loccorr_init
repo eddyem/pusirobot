@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# init 3-point local corrector 
+
+for I in 2 10 11; do
+	./steppermove -I$I -m8000 -r-10000
+done
+
+for I in 2 10 11; do
+	./steppermove -I$I -w
+done
+
+for I in 2 10 11; do
+	./steppermove -I$I -0
+done
+
+for I in 2 10 11; do
+	./steppermove -I$I -a 7200
+done

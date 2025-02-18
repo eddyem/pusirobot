@@ -1,0 +1,46 @@
+#!/bin/bash
+
+CANID=11
+STPPERROT=12800
+
+function onlim(){
+	eval $(steppermove -I11 -E3 | grep LIM1)
+	echo $LIM1
+}
+
+
+if [[ $# != 1 ]]; then
+	echo -e "Usage: $(basename $0) position\n\twhere 'position' is an angle [integer number!!!] from 0 to 360\t0 - limit switch position" >&2
+	exit 1
+fi
+
+if (( $1 > 360 || $1 < 0 )); then
+	echo "'position' should be from 0 360" >&2
+	exit 1
+fi
+
+steppermove -I${CANID} -m1000 
+if [[ $(onlim) == "1" ]]; then
+	echo "Go out from limit switch"
+	steppermove -I${CANID} -cA
+	steppermove -I${CANID} -r -$((STPPERROT / 4)) -w
+	steppermove -I${CANID} -E3 -m1000
+	if (( $(onlim) == 1 )); then
+		echo "TURRET is on limit switch, rotate it first!" >&2
+		exit 1
+	fi
+fi
+
+echo "Go to limit switch"
+steppermove -I${CANID} -E3 -r -$STPPERROT -w
+steppermove -I${CANID} -cA -w
+
+if (( $1 != 0 )); then
+	STP=$(printf %.0f $(echo "12800/360*$1 + 31" | bc -l))
+	STP=$(( STP/32*32 ))
+	echo "Go to angle $1"
+	steppermove -I${CANID} -r -$STP -w
+fi
+
+echo "OK, at place!"
+steppermove -I${CANID} -E3 

@@ -22,7 +22,7 @@
 #include <stdint.h>
 
 #ifndef T_POLLING_TMOUT
-#define T_POLLING_TMOUT (0.5)
+#define T_POLLING_TMOUT (0.1)
 #endif
 
 typedef struct{
