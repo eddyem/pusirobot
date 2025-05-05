@@ -170,7 +170,7 @@ static inline void wait_busy(){
 }
 
 int main(int argc, char *argv[]){
-    initial_setup();
+    sl_init();
     GP = parse_args(argc, argv);
     if(GP->verblevel) maxmesglevl(GP->verblevel);
     if(GP->checkfile){ // just check and exit
@@ -197,7 +197,7 @@ int main(int argc, char *argv[]){
     }
     if(GP->enableESW && GP->disableESW) ERRX("Enable & disable ESW can't meet together");
 
-    check4running(NULL, GP->pidfile);
+    sl_check4running(NULL, GP->pidfile);
     signal(SIGTERM, signals); // kill (-15) - quit
     signal(SIGHUP, SIG_IGN);  // hup - ignore
     signal(SIGINT, signals);  // ctrl+C - quit
@@ -205,7 +205,7 @@ int main(int argc, char *argv[]){
     signal(SIGTSTP, SIG_IGN); // ignore ctrl+Z
 
     if(GP->logfile){
-        sl_loglevel l = LOGLVL + GP->verblevel;
+        sl_loglevel_e l = LOGLVL + GP->verblevel;
         if(l > LOGLEVEL_ANY) l = LOGLEVEL_ANY;
         OPENLOG(GP->logfile, l, 1);
         LOGMSG(("Start application..."));

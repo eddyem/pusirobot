@@ -41,7 +41,7 @@ This file should provide next functions:
   int canbus_read(CANmesg *mesg) - blocking read (broadcast if ID==0 or only from given ID) from can bus, return 0 if all OK
 */
 
-static TTY_descr *dev = NULL;  // shoul be global to restore if die
+static sl_tty_t *dev = NULL;  // shoul be global to restore if die
 static int serialspeed = 115200; // speed to open serial device
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -53,7 +53,7 @@ static char *read_string();
  * @param length   - buffer len
  * @return amount of bytes read
  */
-static int read_ttyX(TTY_descr *d){
+static int read_ttyX(sl_tty_t *d){
     if(!d || d->comfd < 0) return -1;
     size_t L = 0;
     ssize_t l;
@@ -93,11 +93,11 @@ static int ttyWR(const char *buff, int len){
 #ifdef EBUG
     int _U_ n = write(STDERR_FILENO, buff, len);
     fprintf(stderr, "\n");
-    double t0 = dtime();
+    double t0 = sl_dtime();
 #endif
-    int w = write_tty(dev->comfd, buff, (size_t)len);
-    if(!w) w = write_tty(dev->comfd, "\n", 1);
-    DBG("Written, dt=%g", dtime() - t0);
+    int w = sl_tty_write(dev->comfd, buff, (size_t)len);
+    if(!w) w = sl_tty_write(dev->comfd, "\n", 1);
+    DBG("Written, dt=%g", sl_dtime() - t0);
     /*
     int errctr = 0;
     while(1){
@@ -111,12 +111,12 @@ static int ttyWR(const char *buff, int len){
         }else break;
     }*/
     pthread_mutex_unlock(&mutex);
-    DBG("Success, dt=%g", dtime() - t0);
+    DBG("Success, dt=%g", sl_dtime() - t0);
     return w;
 }
 
 void canbus_close(){
-    if(dev) close_tty(&dev);
+    if(dev) sl_tty_close(&dev);
 }
 
 void setserialspeed(int speed){
@@ -132,11 +132,11 @@ int canbus_open(const char *devname){
         WARNX("canbus_open(): need device name");
         return 1;
     }
-    if(dev) close_tty(&dev);
-    dev = new_tty((char*)devname, serialspeed, BUFLEN);
+    if(dev) sl_tty_close(&dev);
+    dev = sl_tty_new((char*)devname, serialspeed, BUFLEN);
     if(dev){
-        if(!tty_open(dev, 1)) // blocking open
-            close_tty(&dev);
+        if(!sl_tty_open(dev, 1)) // blocking open
+            sl_tty_close(&dev);
     }
     if(!dev){
         return 1;
@@ -193,7 +193,7 @@ static char *read_string(){
         return ptr;
     }
     ptr = buf;
-    double d0 = dtime();
+    double d0 = sl_dtime();
     do{
         if((l = read_ttyX(dev))){
             if(l < 0){
@@ -210,9 +210,9 @@ static char *read_string(){
                 DBG("Newline detected");
                 break;
             }
-            d0 = dtime();
+            d0 = sl_dtime();
         }
-    }while(dtime() - d0 < WAIT_TMOUT && LL);
+    }while(sl_dtime() - d0 < WAIT_TMOUT && LL);
     if(r){
         buf[r] = 0;
         optr = strchr(buf, '\n');
@@ -226,7 +226,7 @@ static char *read_string(){
             optr = NULL;
             return NULL;
         }
-        DBG("buf: %s, time: %g", buf, dtime() - d0);
+        DBG("buf: %s, time: %g", buf, sl_dtime() - d0);
         return buf;
     }
     return NULL;
@@ -254,14 +254,14 @@ void showM(CANmesg *m){
 int canbus_read(CANmesg *mesg){
     if(!mesg) return 1;
     pthread_mutex_lock(&mutex);
-    double t0 = dtime();
+    double t0 = sl_dtime();
     int ID = mesg->ID;
     char *ans;
     CANmesg *m;
-    while(dtime() - t0 < T_POLLING_TMOUT){ // read answer
+    while(sl_dtime() - t0 < T_POLLING_TMOUT){ // read answer
         if((ans = read_string())){ // parse new data
             if((m = parseCANmesg(ans))){
-                DBG("Got canbus message (dT=%g):", dtime() - t0);
+                DBG("Got canbus message (dT=%g):", sl_dtime() - t0);
 #ifdef EBUG
                 showM(m);
 #endif

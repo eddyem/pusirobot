@@ -163,8 +163,8 @@ static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
     FNAME();
     CANmesg mesg;
     SDO *sdo = NULL;
-    double t0 = dtime();
-    while(dtime() - t0 < T_POLLING_TMOUT){
+    double t0 = sl_dtime();
+    while(sl_dtime() - t0 < T_POLLING_TMOUT){
         mesg.ID = TSDO_COBID | NID; // read only from given ID
         if(canbus_read(&mesg)){
             DBG("NO CAN data");
@@ -193,9 +193,9 @@ static SDO *getSDOans(uint16_t idx, uint8_t subidx, uint8_t NID){
  */
 SDO *readSDOvalue(uint16_t idx, uint8_t subidx, uint8_t NID){
     FNAME();
-    double t0 = dtime();
+    double t0 = sl_dtime();
     SDO *sdo = NULL;
-    for(int i = 0; i < NTRIES && dtime() - t0 < SDO_ANS_TIMEOUT; ++i){
+    for(int i = 0; i < NTRIES && sl_dtime() - t0 < SDO_ANS_TIMEOUT; ++i){
         DBG("Try %d ...", i);
         if(ask2read(idx, subidx, NID)){
             DBG("Can't initiate upload");
